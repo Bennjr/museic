@@ -1,7 +1,24 @@
-# Tauri + React + Typescript
+# I HATE ADS
+So heres a adfree alternative 
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+# I HATE MY FAVORITE SONGS GETTING BANNED
+And that'll never happen again
 
-## Recommended IDE Setup
+# I WANT ALOT OF CUSTOMIZABILITY
+You've come to the right app
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+# I WANT IT TO BE FAST
+This'll run faster than any other online app or website, local only
+
+# I WANT TO BE ABLE TO ADD ANY SONG EASILY
+Provide a link to youtube, spotify, soundcloud or even shortform videos. Or just upload your own files!
+
+# I WANT FULL CONTROL OVER THE APP
+This is a fully local option with alternative self provided hosting alternatives. Your app, you control
+
+---
+
+# To run
+``` cmd
+pnpm tauri dev
+```
