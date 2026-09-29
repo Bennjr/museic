@@ -5,6 +5,8 @@ import Home from "./pages/home";
 import Library from "./pages/library";
 import Playlist from "./pages/playlist";
 import Account from "./pages/account";
+import Add from "./pages/add";
+
 
 export default function Router() {
     return (
@@ -14,6 +16,7 @@ export default function Router() {
                 <Route path="library" element={<Library />} />
                 <Route path="playlist" element={<Playlist />} />
                 <Route path="account" element={<Account />} />
+                <Route path="add" element={<Add />} />
                 <Route path="*" element={<Home />} />
             </Route>
         </Routes>

@@ -1,96 +1,116 @@
-import { Play } from "lucide-react"
-import { invoke } from "@tauri-apps/api/core"
+import { useEffect, useState } from "react";
+import { Play } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 
-const temp_recent = [
-    { "name": "Something", "description": "Some desc", "author": "Some author", "added": "Dec 28 2026", "length": "3:23" },
-    { "name": "Something", "description": "Some desc", "author": "Some author", "added": "Dec 28 2026", "length": "3:23" },
-    { "name": "Something", "description": "Some desc", "author": "Some author", "added": "Dec 28 2026", "length": "3:23" },
-    { "name": "Something", "description": "Some desc", "author": "Some author", "added": "Dec 28 2026", "length": "3:23" },
-    { "name": "Something", "description": "Some desc", "author": "Some author", "added": "Dec 28 2026", "length": "3:23" },
-]
+type Song = { id: number; name: string; description: string; author: string; added: string; length: string };
 
-const temp_quick_picks = [
-    { "name": "Something", "description": "Some desc", "author": "Some author", "added": "Dec 28 2026", "length": "3:23" },
-    { "name": "Something", "description": "Some desc", "author": "Some author", "added": "Dec 28 2026", "length": "3:23" },
-    { "name": "Something", "description": "Some desc", "author": "Some author", "added": "Dec 28 2026", "length": "3:23" },
-    { "name": "Something", "description": "Some desc", "author": "Some author", "added": "Dec 28 2026", "length": "3:23" },
-    { "name": "Something", "description": "Some desc", "author": "Some author", "added": "Dec 28 2026", "length": "3:23" },
-    { "name": "Something", "description": "Some desc", "author": "Some author", "added": "Dec 28 2026", "length": "3:23" },
-    { "name": "Something", "description": "Some desc", "author": "Some author", "added": "Dec 28 2026", "length": "3:23" },
-    { "name": "Something", "description": "Some desc", "author": "Some author", "added": "Dec 28 2026", "length": "3:23" },
-    { "name": "Something", "description": "Some desc", "author": "Some author", "added": "Dec 28 2026", "length": "3:23" },
-    { "name": "Something", "description": "Some desc", "author": "Some author", "added": "Dec 28 2026", "length": "3:23" },
-]
+function useSongs(command: string) {
+    const [songs, setSongs] = useState<Song[]>([]);
+    const [loading, setLoading] = useState(true);
 
-const temp_playlists = [
-    { "name": "temp1", "url": "/playlist", "description": "desc1" },
-    { "name": "temp2", "url": "/playlist", "description": "desc2" },
-    { "name": "temp3", "url": "/playlist", "description": "desc3" },
-    { "name": "temp4", "url": "/playlist", "description": "desc4" },
-    { "name": "temp5", "url": "/playlist", "description": "desc5" }
-]
+    useEffect(() => {
+        invoke<Song[]>(command)
+            .then(setSongs)
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    }, [command]);
+
+    return { songs, loading };
+}
 
 export default function Home() {
+    const recent = useSongs("get_recent_songs");
+    const quickPicks = useSongs("get_quick_picks");
+    const recentlyPlayed = useSongs("get_recently_played");
+    const neverPlayed = useSongs("get_never_played");
 
-    const playSong = async () => {
-        await invoke("play_song_from_db", { id: 1 });
-    }
+    const playSong = (id: number) => invoke("play_song_from_db", { id }).catch(console.error);
 
     return (
         <div className="flex flex-col gap-16 p-8">
             <h1 className="text-4xl font-bold">Home</h1>
 
+            <SongRow title="Most recent" songs={recent.songs} loading={recent.loading} onPlay={playSong} />
+
             <section>
-                <h2 className="mb-4 text-3xl font-bold">Most recent</h2>
+                <h2 className="mb-4 text-3xl font-bold">Quick picks</h2>
+                {quickPicks.songs.length === 0 && !quickPicks.loading ? (
+                    <EmptyState text="Play a few songs to see picks here" />
+                ) : (
+                    <div className="grid grid-cols-3 grid-rows-3 gap-4">
+                        {quickPicks.songs.map((song) => (
+                            <button
+                                key={song.id}
+                                onClick={() => playSong(song.id)}
+                                className="flex items-center gap-3 p-2 bg-foreground rounded-sm text-left hover:bg-white/10 transition-colors"
+                            >
+                                <div className="size-12 bg-blue-500 rounded-lg shrink-0" />
+                                <div className="min-w-0">
+                                    <p className="font-medium truncate">{song.name}</p>
+                                    <p className="text-sm text-c-text/70 truncate">{song.description}</p>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </section>
+
+            <section>
+                <h2 className="mb-4 text-3xl font-bold">Recently Played</h2>
+                {recentlyPlayed.songs.length === 0 && !recentlyPlayed.loading ? (
+                    <EmptyState text="Nothing played yet" />
+                ) : (
+                    <div className="w-full h-56">
+                        {recentlyPlayed.songs.slice(0, 1).map((song) => (
+                            <button
+                                key={song.id}
+                                onClick={() => playSong(song.id)}
+                                className="h-full w-full flex flex-row gap-3 p-2 bg-foreground rounded-sm text-left hover:bg-white/10 transition-colors"
+                            >
+                                <div className="w-auto h-full aspect-square p-2 bg-blue-500 rounded-lg shrink-0" />
+                                <div>
+                                    <p className="font-medium truncate">{song.name}</p>
+                                    <p className="text-sm text-c-text/70 truncate">{song.description}</p>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </section>
+
+            <SongRow title="Never listened" songs={neverPlayed.songs} loading={neverPlayed.loading} onPlay={playSong} />
+        </div>
+    );
+}
+
+function SongRow({ title, songs, loading, onPlay }: {
+    title: string; songs: Song[]; loading: boolean; onPlay: (id: number) => void;
+}) {
+    return (
+        <section>
+            <h2 className="mb-4 text-3xl font-bold">{title}</h2>
+            {songs.length === 0 && !loading ? (
+                <EmptyState text="Nothing here yet" />
+            ) : (
                 <div className="flex flex-row gap-4">
-                    {temp_recent.slice(0, 5).map((song) => (
-                        <div key={song.name} className="flex flex-col gap-2 group cursor-pointer" onClick={playSong}>
-                            <div className="relative 2xl:size-56 size-36 bg-blue-500 rounded-lg shrink-0 overflow-hidden">
+                    {songs.map((song) => (
+                        <div key={song.id} className="flex flex-col gap-2 group cursor-pointer" onClick={() => onPlay(song.id)}>
+                            <div className="relative 2xl:size-56 size-36 bg-foreground rounded-lg shrink-0 overflow-hidden">
                                 <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                     <div className="size-12 rounded-full bg-black/90 flex items-center justify-center shadow-lg">
                                         <Play className="size-6 text-white fill-black ml-0.5" />
                                     </div>
                                 </div>
                             </div>
-
                             <p className="text-sm truncate">{song.name}</p>
                         </div>
                     ))}
                 </div>
-            </section>
-
-            <section>
-                <h2 className="mb-4 text-3xl font-bold">Quick picks</h2>
-                <div className="grid grid-cols-3 grid-rows-3 gap-4">
-                    {temp_quick_picks.slice(0, 9).map((song) => (
-                        <div key={song.name} className="flex items-center gap-3 p-2 bg-gray-900 rounded-sm">
-                            <div className="size-12 bg-blue-500 rounded-lg shrink-0" />
-                            <div className="min-w-0">
-                                <p className="font-medium truncate">{song.name}</p>
-                                <p className="text-sm text-c-text/70 truncate">{song.description}</p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </section>
-
-            <section>
-                <div className="w-full h-36 bg-blue-500 rounded-lg">
-                    <h1>Temp banner</h1>
-                </div>
-            </section>
-
-            <section>
-                <h2 className="mb-4 text-3xl font-bold">Playlists</h2>
-                <div className="flex flex-row gap-4 overflow-x-auto">
-                    {temp_recent.map((song) => (
-                        <div key={song.name} className="flex flex-col gap-2 shrink-0">
-                            <div className="size-36 bg-blue-500 rounded-lg" />
-                            <p className="text-sm truncate w-32">{song.name}</p>
-                        </div>
-                    ))}
-                </div>
-            </section>
-        </div>
+            )}
+        </section>
     );
+}
+
+function EmptyState({ text }: { text: string }) {
+    return <p className="text-sm opacity-40">{text}</p>;
 }

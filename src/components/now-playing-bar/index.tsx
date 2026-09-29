@@ -1,49 +1,62 @@
-import { Play, Pause, Repeat, SkipForward } from "lucide-react";
 import { useState } from "react";
-import { invoke } from '@tauri-apps/api/core';
+import { ChevronUp, Play, Pause, SkipBack, SkipForward } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 
 import Options from "./components/options";
 import PlayBar from "./components/play-bar";
-import SongInfo from "./components/song-info";
+import NowPlayingExpanded from "./components/now-playing-expanded";
+import { usePlayer } from "./use-player";
+
+const iconBtn = "p-2 rounded-full hover:bg-accent transition-default";
 
 export default function NowPlayingBar() {
-    const [isPlaying, setPlaying] = useState(false);
+    const [expanded, setExpanded] = useState(false);
+    const player = usePlayer();
 
     const togglePlay = async () => {
-        if (isPlaying) {
-            await invoke("pause_song")
-            setPlaying(false)
-        } else {
-            await invoke("resume_song")
-            setPlaying(true)
-        }
-    }
+        await invoke(player.playing ? "pause_song" : "resume_song");
+        player.refresh();
+    };
+
+    const seek = (secs: number) =>
+        invoke("seek_song", { positionSecs: secs }).then(player.refresh).catch(console.error);
 
     return (
-        <aside className="w-full h-full flex flex-col">
-            <SongInfo />
-            <div className="bg-black grid grid-cols-2 h-full items-center px-4 h-24 rounded-b-lg p-2">
-                <div className="flex flex-row items-center gap-4">
-                    <div className="flex flex-row items-center gap-1">
-                        <button className="p-2 hover:bg-gray-500 rounded-full transition-default">
-                            <SkipForward className="rotate-180" />
+        <aside
+            className={`fixed left-0 right-0 bg-extra flex flex-col overflow-hidden z-50
+                transition-all duration-300 ease-in-out
+                ${expanded ? "top-0 bottom-0 rounded-none" : "bottom-0 h-14 rounded-b-sm"}`}
+        >
+            {expanded ? (
+                <NowPlayingExpanded player={player} onCollapse={() => setExpanded(false)} onTogglePlay={togglePlay} onSeek={seek} />
+            ) : (
+                <div className="h-14 flex flex-row items-center gap-6 px-4 shrink-0">
+                    <div className="flex flex-row items-center gap-1 shrink-0">
+                        <button className={iconBtn} aria-label="Previous">
+                            <SkipBack size={20} />
                         </button>
                         <button
-                            onClick={() => togglePlay()}
-                            className="p-2 hover:bg-gray-500 rounded-full transition-default"
+                            onClick={togglePlay}
+                            aria-label={player.playing ? "Pause" : "Play"}
+                            className="p-2 rounded-full bg-white text-black hover:scale-105 transition-transform"
                         >
-                            {isPlaying ? <Pause /> : <Play />}
+                            {player.playing ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
                         </button>
-                        <button className="p-2 hover:bg-gray-500 rounded-full transition-default">
-                            <SkipForward />
+                        <button className={iconBtn} aria-label="Next">
+                            <SkipForward size={20} />
                         </button>
                     </div>
-                    <PlayBar />
+
+                    <PlayBar position={player.position} duration={player.duration} onSeek={seek} />
+
+                    <div className="flex flex-row items-center gap-2 shrink-0">
+                        <Options />
+                        <button className={iconBtn} aria-label="Expand" onClick={() => setExpanded(true)}>
+                            <ChevronUp size={18} />
+                        </button>
+                    </div>
                 </div>
-                <div className="flex flex-row gap-2 justify-end items-center">
-                    <Options />
-                </div>
-            </div>
+            )}
         </aside>
     );
 }

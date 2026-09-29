@@ -1,68 +1,53 @@
-import { useState, useEffect, useRef } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useState, useRef } from "react";
 
 function formatTime(seconds: number): string {
     if (!isFinite(seconds) || seconds < 0) return "0:00";
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export default function PlayBar() {
-    const [position, setPosition] = useState(0);
-    const [duration, setDuration] = useState(0);
-    const isDragging = useRef(false);
+export default function PlayBar({ position, duration, onSeek }: {
+    position: number;
+    duration: number;
+    onSeek: (secs: number) => void;
+}) {
+    const [dragValue, setDragValue] = useState<number | null>(null);
+    const dragRef = useRef<number | null>(null);
+    const shown = dragValue ?? position;
+    const fill = duration > 0 ? (shown / duration) * 100 : 0;
 
-    useEffect(() => {
-        const interval = setInterval(async () => {
-            if (isDragging.current) return;
-
-            try {
-                const progress = await invoke<{
-                    position_secs: number;
-                    duration_secs: number | null;
-                }>("get_progress");
-
-                setPosition(progress.position_secs);
-                if (progress.duration_secs !== null) {
-                    setDuration(progress.duration_secs);
-                }
-            } catch (e) {
-                console.error("failed to get progress:", e);
-            }
-        }, 500);
-
-        return () => clearInterval(interval);
-    }, []);
-
-    const percent = duration > 0 ? (position / duration) * 100 : 0;
-
-    const handleChange = (value: number) => {
-        isDragging.current = true;
-        const newPosition = (value / 100) * duration;
-        setPosition(newPosition);
+    const handleChange = (v: number) => {
+        dragRef.current = v;
+        setDragValue(v);
     };
 
-    const handleCommit = (value: number) => {
-        const newPosition = (value / 100) * duration;
-        invoke("seek_song", { positionSecs: newPosition }).catch(console.error);
-        isDragging.current = false;
+    const commit = () => {
+        const v = dragRef.current;
+        if (v === null) return; // already committed, ignore duplicate events
+        dragRef.current = null;
+        setDragValue(null);
+        onSeek(v);
     };
 
     return (
-        <div className="w-full flex flex-row gap-4 items-center">
-            <p>{formatTime(position)}</p>
+        <div className="flex-1 flex flex-row items-center gap-3 text-xs text-gray-400 tabular-nums">
+            <span className="w-10 text-right">{formatTime(shown)}</span>
             <input
                 type="range"
                 min={0}
-                max={100}
-                value={percent}
+                max={duration || 1}
+                step={0.1}
+                value={shown}
+                disabled={duration === 0}
                 onChange={(e) => handleChange(Number(e.target.value))}
-                onMouseUp={(e) => handleCommit(Number((e.target as HTMLInputElement).value))}
-                onTouchEnd={(e) => handleCommit(Number((e.target as HTMLInputElement).value))}
-                className="w-full h-1 bg-white rounded-full"
+                onPointerUp={commit}
+                onPointerCancel={commit}
+                onKeyUp={commit}
+                style={{ "--fill": `${fill}%` } as React.CSSProperties}
+                className="slider flex-1"
             />
-            <p>{formatTime(duration)}</p>
+            <span className="w-10">{formatTime(duration)}</span>
         </div>
     );
 }

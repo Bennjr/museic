@@ -9,8 +9,9 @@ pub enum AudioCommand {
     Pause,
     Resume,
     SetVolume(f32),
-    GetProgress(Sender<(Duration, Option<Duration>)>),
+    GetProgress(Sender<(Duration, Option<Duration>, bool)>),
     SeekTo(Duration),
+    Stop,
 }
 
 #[derive(Clone)]
@@ -35,14 +36,18 @@ impl AudioHandle {
         let _ = self.sender.send(AudioCommand::SetVolume(volume));
     }
 
-    pub fn get_progress(&self) -> (Duration, Option<Duration>) {
+    pub fn get_progress(&self) -> (Duration, Option<Duration>, bool) {
         let (reply_tx, reply_rx) = mpsc::channel();
         let _ = self.sender.send(AudioCommand::GetProgress(reply_tx));
-        reply_rx.recv().unwrap_or((Duration::ZERO, None))
+        reply_rx.recv().unwrap_or((Duration::ZERO, None, true))
     }
 
     pub fn seek(&self, position: Duration) {
         let _ = self.sender.send(AudioCommand::SeekTo(position));
+    }
+
+    pub fn stop(&self) {
+        let _ = self.sender.send(AudioCommand::Stop);
     }
 }
 
@@ -61,24 +66,31 @@ pub fn spawn_audio_thread() -> AudioHandle {
                     Ok(file) => match Decoder::try_from(file) {
                         Ok(source) => {
                             current_duration = source.total_duration();
+                            player.clear();
                             player.append(source);
+                            player.play();
                         }
                         Err(e) => eprintln!("failed to decode {path}: {e}"),
                     },
                     Err(e) => eprintln!("failed to open {path}: {e}"),
                 },
+
                 AudioCommand::Pause => player.pause(),
                 AudioCommand::Resume => player.play(),
+
                 AudioCommand::SetVolume(v) => player.set_volume(v as _),
                 AudioCommand::GetProgress(reply) => {
                     let pos = player.get_pos();
-                    let _ = reply.send((pos, current_duration));
+                    let _ = reply.send((pos, current_duration, player.is_paused()));
                 }
+
                 AudioCommand::SeekTo(pos) => {
                     if let Err(e) = player.try_seek(pos) {
                         eprintln!("seek failed: {e}");
                     }
                 }
+
+                AudioCommand::Stop => player.stop(),
             }
         }
     });

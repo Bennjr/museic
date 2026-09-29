@@ -8,6 +8,7 @@ use std::sync::Mutex;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir().expect("no app data dir");
             std::fs::create_dir_all(&app_data_dir).ok();
@@ -27,10 +28,20 @@ pub fn run() {
             commands::play_song,
             commands::pause_song,
             commands::resume_song,
+            commands::stop_song,
             commands::set_volume,
             commands::seek_song,
             commands::get_progress,
             commands::play_song_from_db,
+            commands::add_local_song,
+            commands::get_recent_songs,
+            commands::get_quick_picks,
+            commands::get_recently_played,
+            commands::get_never_played,
+            commands::get_playlists,
+            commands::create_playlist,
+            commands::get_playlist_with_songs,
+            commands::update_song_field,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
