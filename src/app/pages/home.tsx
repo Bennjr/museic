@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Play } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { usePlayer } from "../utils/use-player";
 
 type Song = { id: number; name: string; description: string; author: string; added: string; length: string };
 
@@ -24,61 +25,63 @@ export default function Home() {
     const recentlyPlayed = useSongs("get_recently_played");
     const neverPlayed = useSongs("get_never_played");
 
-    const playSong = (id: number) => invoke("play_song_from_db", { id }).catch(console.error);
+    const player = usePlayer();
 
     return (
-        <div className="flex flex-col gap-16 p-8">
-            <h1 className="text-4xl font-bold">Home</h1>
+        <div className="w-full h-full bg-gradient-to-br from-background from-40% via-[#121212] to-[#1a1520]">
+            <div className="flex flex-col gap-16 p-8">
+                <h1 className="text-4xl font-bold">Home</h1>
 
-            <SongRow title="Most recent" songs={recent.songs} loading={recent.loading} onPlay={playSong} />
+                <SongRow title="Most recent" songs={recent.songs} loading={recent.loading} onPlay={player.playSong} />
 
-            <section>
-                <h2 className="mb-4 text-3xl font-bold">Quick picks</h2>
-                {quickPicks.songs.length === 0 && !quickPicks.loading ? (
-                    <EmptyState text="Play a few songs to see picks here" />
-                ) : (
-                    <div className="grid grid-cols-3 grid-rows-3 gap-4">
-                        {quickPicks.songs.map((song) => (
-                            <button
-                                key={song.id}
-                                onClick={() => playSong(song.id)}
-                                className="flex items-center gap-3 p-2 bg-foreground rounded-sm text-left hover:bg-white/10 transition-colors"
-                            >
-                                <div className="size-12 bg-blue-500 rounded-lg shrink-0" />
-                                <div className="min-w-0">
-                                    <p className="font-medium truncate">{song.name}</p>
-                                    <p className="text-sm text-c-text/70 truncate">{song.description}</p>
-                                </div>
-                            </button>
-                        ))}
-                    </div>
-                )}
-            </section>
+                <section>
+                    <h2 className="mb-4 text-3xl font-bold">Quick picks</h2>
+                    {quickPicks.songs.length === 0 && !quickPicks.loading ? (
+                        <EmptyState text="Play a few songs to see picks here" />
+                    ) : (
+                        <div className="grid grid-cols-3 grid-rows-3 gap-4">
+                            {quickPicks.songs.map((song) => (
+                                <button
+                                    key={song.id}
+                                    onClick={() => player.playSong(song.id)}
+                                    className="flex items-center gap-3 p-2 bg-foreground rounded-sm text-left hover:bg-white/10 transition-colors"
+                                >
+                                    <div className="size-12 bg-blue-500 rounded-lg shrink-0" />
+                                    <div className="min-w-0">
+                                        <p className="font-medium truncate">{song.name}</p>
+                                        <p className="text-sm text-c-text/70 truncate">{song.description}</p>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </section>
 
-            <section>
-                <h2 className="mb-4 text-3xl font-bold">Recently Played</h2>
-                {recentlyPlayed.songs.length === 0 && !recentlyPlayed.loading ? (
-                    <EmptyState text="Nothing played yet" />
-                ) : (
-                    <div className="w-full h-56">
-                        {recentlyPlayed.songs.slice(0, 1).map((song) => (
-                            <button
-                                key={song.id}
-                                onClick={() => playSong(song.id)}
-                                className="h-full w-full flex flex-row gap-3 p-2 bg-foreground rounded-sm text-left hover:bg-white/10 transition-colors"
-                            >
-                                <div className="w-auto h-full aspect-square p-2 bg-blue-500 rounded-lg shrink-0" />
-                                <div>
-                                    <p className="font-medium truncate">{song.name}</p>
-                                    <p className="text-sm text-c-text/70 truncate">{song.description}</p>
-                                </div>
-                            </button>
-                        ))}
-                    </div>
-                )}
-            </section>
+                <section>
+                    <h2 className="mb-4 text-3xl font-bold">Recently Played</h2>
+                    {recentlyPlayed.songs.length === 0 && !recentlyPlayed.loading ? (
+                        <EmptyState text="Nothing played yet" />
+                    ) : (
+                        <div className="w-full h-56">
+                            {recentlyPlayed.songs.slice(0, 1).map((song) => (
+                                <button
+                                    key={song.id}
+                                    onClick={() => player.playSong(song.id)}
+                                    className="h-full w-full flex flex-row gap-3 p-2 bg-foreground rounded-sm text-left hover:bg-white/10 transition-colors"
+                                >
+                                    <div className="w-auto h-full aspect-square p-2 bg-blue-500 rounded-lg shrink-0" />
+                                    <div>
+                                        <p className="font-medium truncate">{song.name}</p>
+                                        <p className="text-sm text-c-text/70 truncate">{song.description}</p>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </section>
 
-            <SongRow title="Never listened" songs={neverPlayed.songs} loading={neverPlayed.loading} onPlay={playSong} />
+                <SongRow title="Never listened" songs={neverPlayed.songs} loading={neverPlayed.loading} onPlay={player.playSong} />
+            </div>
         </div>
     );
 }

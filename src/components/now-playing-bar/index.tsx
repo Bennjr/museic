@@ -3,9 +3,10 @@ import { ChevronUp, Play, Pause, SkipBack, SkipForward } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 
 import Options from "./components/options";
+import { SongInfo } from "./components/song-info"
 import PlayBar from "./components/play-bar";
 import NowPlayingExpanded from "./components/now-playing-expanded";
-import { usePlayer } from "./use-player";
+import { usePlayer } from "../../app/utils/use-player";
 
 const iconBtn = "p-2 rounded-full hover:bg-accent transition-default";
 
@@ -46,6 +47,8 @@ export default function NowPlayingBar() {
                             <SkipForward size={20} />
                         </button>
                     </div>
+
+                    <SongInfo song={player.currentSong} />
 
                     <PlayBar position={player.position} duration={player.duration} onSeek={seek} />
 

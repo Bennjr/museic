@@ -6,6 +6,8 @@ import Library from "./pages/library";
 import Playlist from "./pages/playlist";
 import Account from "./pages/account";
 import Add from "./pages/add";
+import Songs from "./pages/songs";
+import Settings from "./pages/settings";
 
 
 export default function Router() {
@@ -14,8 +16,11 @@ export default function Router() {
             <Route element={<Layout />}>
                 <Route index element={<Home />} />
                 <Route path="library" element={<Library />} />
+                <Route path="songs" element={<Songs />} />
                 <Route path="playlist" element={<Playlist />} />
-                <Route path="account" element={<Account />} />
+                <Route path="playlist/:id" element={<Playlist />} />
+                <Route path="account" element={<Account />} />,
+                <Route path="settings" element={<Settings />} />
                 <Route path="add" element={<Add />} />
                 <Route path="*" element={<Home />} />
             </Route>

@@ -1,4 +1,6 @@
 mod utils;
+mod types;
+
 use utils::{music, db, commands};
 
 use tauri::Manager;
@@ -15,7 +17,7 @@ pub fn run() {
 
             let audio_handle = music::spawn_audio_thread();
             app.manage(audio_handle.clone());
-            app.manage(commands::CurrentSong(Mutex::new(None)));
+            app.manage(types::CurrentSong(Mutex::new(None)));
 
             tauri::async_runtime::block_on(async {
                 let pool = db::init_db(&app_data_dir).await.expect("db init failed");
@@ -42,6 +44,9 @@ pub fn run() {
             commands::create_playlist,
             commands::get_playlist_with_songs,
             commands::update_song_field,
+            commands::delete_playlist,
+            commands::add_to_playlist,
+            commands::get_current_song,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

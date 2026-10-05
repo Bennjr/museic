@@ -1,4 +1,4 @@
-import { Clock, Play } from "lucide-react";
+import { Clock, Play, Trash } from "lucide-react";
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useParams } from "react-router-dom";
@@ -13,11 +13,18 @@ export default function Playlist() {
     const [playlist, setPlaylist] = useState<PlaylistMeta | null>(null);
     const [songs, setSongs] = useState<Song[]>([]);
 
+    const [deleted, setDeleted] = useState(false)
+
     useEffect(() => {
         invoke<[PlaylistMeta, Song[]]>("get_playlist_with_songs", { id: playlistId })
             .then(([meta, s]) => { setPlaylist(meta); setSongs(s); })
             .catch(console.error);
     }, [playlistId]);
+
+    const delete_playlist = async () => {
+        invoke("delete_playlist", { id: playlistId })
+        setDeleted(true)
+    }
 
     const updateSong = (songId: number, field: string, value: string) => {
         setSongs((prev) => prev.map((s) => (s.id === songId ? { ...s, [field]: value } : s)));
@@ -26,10 +33,11 @@ export default function Playlist() {
 
     const playSong = (songId: number) => invoke("play_song_from_db", { id: songId }).catch(console.error);
 
-    if (!playlist) return null; // or a loading skeleton
+    if (!playlist) return null;
 
     return (
         <div className="relative p-6 md:p-8 flex flex-col gap-8">
+            {deleted ? (<PlaylistDeleted />) : ("")}
             <div className="flex items-end gap-6">
                 <div className="size-40 md:size-52 rounded-lg bg-foreground shadow-xl shrink-0" />
                 <div className="flex flex-col gap-2 min-w-0">
@@ -38,6 +46,9 @@ export default function Playlist() {
                     <p className="text-sm opacity-70">{playlist.description}</p>
                     <p className="text-sm opacity-50 mt-1">{songs.length} songs</p>
                 </div>
+                <button className="p-2 hover:bg-white" onClick={delete_playlist}>
+                    <Trash />
+                </button>
             </div>
 
             <div className="grid grid-cols-[16px_1fr_1fr_120px_80px] gap-4 px-3 text-xs font-medium uppercase tracking-wider opacity-50">
@@ -94,4 +105,38 @@ export default function Playlist() {
             </ul>
         </div>
     );
+}
+
+const PlaylistDeleted = () => {
+    return (
+        <div className="justify-items-center justify-center fixed w-full h-full flex flex-col gap-4 bg-background z-50">
+            <h1 className="text-4xl text-bold">Playlist successfully deleted</h1>
+            <p>You can now return</p>
+        </div>
+    )
+}
+
+const PlaylistConfig = () => {
+    return (
+        <div>
+
+        </div>
+    )
+}
+
+const PlaylistHero1 = (playlist: PlaylistMeta, songs: Song, delete_playlist: any) => {
+    return (
+        <div className="flex items-end gap-6">
+            <div className="size-40 md:size-52 rounded-lg bg-foreground shadow-xl shrink-0" />
+            <div className="flex flex-col gap-2 min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wider opacity-60">Playlist</p>
+                <h1 className="text-4xl md:text-5xl font-bold truncate">{playlist.name}</h1>
+                <p className="text-sm opacity-70">{playlist.description}</p>
+                <p className="text-sm opacity-50 mt-1">{songs.length} songs</p>
+            </div>
+            <button className="p-2 hover:bg-white" onClick={delete_playlist}>
+                <Trash />
+            </button>
+        </div>
+    )
 }

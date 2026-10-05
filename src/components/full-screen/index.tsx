@@ -24,7 +24,7 @@ export function FullScreenProvider({ children }: { children: ReactNode }) {
         <Ctx.Provider value={{ open, close, isOpen: content !== null }}>
             {children}
             {content && (
-                <div className="fixed inset-0 z-50 bg-black animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-50 bg-black animate-in fade-in duration-200 rounded-sm">
                     {content}
                 </div>
             )}

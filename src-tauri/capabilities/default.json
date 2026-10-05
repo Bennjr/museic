@@ -3,7 +3,8 @@
   "identifier": "default",
   "description": "Capability for the main window",
   "windows": [
-    "Museic"
+    "Museic",
+    "settings"
   ],
   "permissions": [
     "core:default",
@@ -13,6 +14,7 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
     "core:window:allow-is-maximized",
-    "dialog:default"
+    "dialog:default",
+    "core:webview:allow-create-webview-window"
   ]
 }

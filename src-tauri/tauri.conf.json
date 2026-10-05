@@ -20,7 +20,19 @@
         "focus": true,
         "center": true,
         "label": "Museic",
-        "transparent": false
+        "transparent": true
+      },
+      {
+        "title": "Settings",
+        "label": "Settings",
+        "width": 800,
+        "height": 600,
+        "decorations": false,
+        "shadow": false,
+        "center": true,
+        "focus": true,
+        "transparent": true,
+        "create": false
       }
     ],
     "security": {

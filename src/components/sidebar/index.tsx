@@ -1,40 +1,44 @@
-import { Home, ListMusic, LibraryBig, Search, List, LayoutGrid, Rows3, Plus } from "lucide-react";
+import { Home, ListMusic, LibraryBig, List, LayoutGrid, Rows3, Plus, Music } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { ResizableBox } from "react-resizable";
 import "react-resizable/css/styles.css";
-import { useTab } from "@components/tab-provider";
 import { invoke } from "@tauri-apps/api/core";
+import { useNavigate, useLocation, NavLink } from "react-router-dom";
 
 type Playlist = { id: number; name: string; description: string; created: string };
 type ViewMode = "list" | "compact" | "grid";
 
 function NavItem({ to, icon: Icon, label }: { to: string; icon: React.ElementType; label: string }) {
-    const { path, navigate } = useTab();
-    const active = path === to || (to !== "/" && path.startsWith(to));
-
     return (
-        <button
-            onClick={() => navigate(to)}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full text-left ${active ? "bg-white/10 text-white" : "text-c-text/70 hover:bg-white/5 hover:text-white"
-                }`}
+        <NavLink
+            to={to}
+            end={to === "/"}
+            className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full text-left ${isActive ? "bg-white/10 text-white" : "text-c-text/70 hover:bg-white/5 hover:text-white"
+                }`
+            }
         >
             <Icon className="size-5 shrink-0" />
             <span className="font-medium">{label}</span>
-        </button>
+        </NavLink>
     );
 }
 
 export default function Sidebar() {
-    const [search, setSearch] = useState("");
+    const navigate = useNavigate();
+    const { pathname } = useLocation();
+
     const [width, setWidth] = useState(256);
     const [view, setView] = useState<ViewMode>("list");
     const [playlists, setPlaylists] = useState<Playlist[]>([]);
     const [creating, setCreating] = useState(false);
     const [newName, setNewName] = useState("");
-    const inputRef = useRef<HTMLInputElement>(null);
-    const { path, navigate } = useTab();
 
-    const loadPlaylists = () => invoke<Playlist[]>("get_playlists").then(setPlaylists).catch(console.error);
+    const [isMaximized, setIsMaximized] = useState(false);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const loadPlaylists = () =>
+        invoke<Playlist[]>("get_playlists").then(setPlaylists).catch(console.error);
 
     useEffect(() => {
         loadPlaylists();
@@ -61,10 +65,6 @@ export default function Sidebar() {
         }
     };
 
-    const filtered = search
-        ? playlists.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
-        : playlists;
-
     return (
         <ResizableBox
             width={width}
@@ -81,19 +81,9 @@ export default function Sidebar() {
         >
             <aside style={{ width }} className="h-full flex flex-col bg-c-secondary/80 backdrop-blur-xl border-r border-white/5">
                 <div className="p-4 space-y-6 h-full flex flex-col">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-c-text/50 pointer-events-none" />
-                        <input
-                            type="text"
-                            placeholder="Search..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className="w-full h-10 pl-10 pr-3 rounded-lg bg-white/10 text-sm placeholder:text-c-text/40 outline-none focus:bg-white/15 transition-colors"
-                        />
-                    </div>
-
                     <div className="flex flex-col gap-1">
                         <NavItem to="/" icon={Home} label="Home" />
+                        <NavItem to="/songs" icon={Music} label="Songs" />
                         <NavItem to="/library" icon={LibraryBig} label="Library" />
                     </div>
 
@@ -101,7 +91,9 @@ export default function Sidebar() {
                         <div className="flex items-center justify-between px-3 mb-3">
                             <div className="flex items-center gap-2">
                                 <ListMusic className="size-4 text-c-text/50" />
-                                <span className="text-xs font-semibold uppercase tracking-wider text-c-text/50">Playlists</span>
+                                <span className="text-xs font-semibold uppercase tracking-wider text-c-text/50">
+                                    Playlists
+                                </span>
                             </div>
                             <div className="flex items-center gap-0.5">
                                 <button
@@ -133,7 +125,10 @@ export default function Sidebar() {
                                 onChange={(e) => setNewName(e.target.value)}
                                 onKeyDown={(e) => {
                                     if (e.key === "Enter") submitNewPlaylist();
-                                    if (e.key === "Escape") { setCreating(false); setNewName(""); }
+                                    if (e.key === "Escape") {
+                                        setCreating(false);
+                                        setNewName("");
+                                    }
                                 }}
                                 onBlur={submitNewPlaylist}
                                 placeholder="Playlist name"
@@ -141,19 +136,20 @@ export default function Sidebar() {
                             />
                         )}
 
-                        {filtered.length === 0 ? (
-                            <p className="text-xs text-c-text/40 px-3">
-                                {playlists.length === 0 ? "No playlists yet" : "No matches"}
-                            </p>
+                        {playlists.length === 0 ? (
+                            <p className="text-xs text-c-text/40 px-3">No playlists yet</p>
                         ) : view === "list" ? (
                             <ul className="space-y-1">
-                                {filtered.map((list) => {
+                                {playlists.map((list) => {
                                     const url = `/playlist/${list.id}`;
+                                    const active = pathname === url;
                                     return (
                                         <li key={list.id}>
                                             <button
                                                 onClick={() => navigate(url)}
-                                                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group w-full text-left ${path === url ? "bg-white/10 text-white" : "text-c-text/70 hover:bg-white/5 hover:text-white"
+                                                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group w-full text-left ${active
+                                                    ? "bg-white/10 text-white"
+                                                    : "text-c-text/70 hover:bg-white/5 hover:text-white"
                                                     }`}
                                             >
                                                 <div className="size-10 rounded-md bg-blue-500 shrink-0 shadow-sm" />

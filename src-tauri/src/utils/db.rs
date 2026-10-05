@@ -1,28 +1,11 @@
 use sqlx::{
     sqlite::{SqlitePool, SqlitePoolOptions},
 };
-
 use std::path::Path;
+use chrono::{DateTime, Utc};
+use rand::Rng;
 
-#[derive(serde::Serialize, sqlx::FromRow, Clone)]
-pub struct Song {
-    pub id: i64,
-    pub name: String,
-    pub description: String,
-    pub author: String,
-    pub added: String,
-    pub length: String,
-    pub path: String,
-}
-
-#[derive(serde::Serialize, sqlx::FromRow, Clone)]
-pub struct Playlist {
-    pub id: i64,
-    pub name: String,
-    pub description: String,
-    pub created: String,
-}
-
+use crate::types::{Song, Playlist};
 
 pub async fn init_db(app_data_dir: &Path) -> Result<SqlitePool, sqlx::Error> {
     let db_path = app_data_dir.join("app.db");
@@ -49,7 +32,8 @@ pub async fn init_db(app_data_dir: &Path) -> Result<SqlitePool, sqlx::Error> {
             length TEXT,
             path TEXT NOT NULL,
             play_count INTEGER NOT NULL DEFAULT 0,
-            last_played TEXT
+            last_played TEXT,
+            cover TEXT NOT NULL
         )
         "#
     )
@@ -112,13 +96,19 @@ pub async fn add_song(
     Ok(id)
 }
 
-pub async fn get_song_path(pool: &sqlx::SqlitePool, id: i64) -> Result<String, sqlx::Error> {
-    let row: (String,) = sqlx::query_as("SELECT path FROM songs WHERE id = ?1")
-        .bind(id)
-        .fetch_one(pool)
-        .await?;
 
-    Ok(row.0)
+// TODO, FIND HASH OF mp3 AND ADD IT ALONG WITH THE OTHER INFO
+pub async fn get_song(pool: &sqlx::SqlitePool, id: i64) -> Result<Option<Song>, sqlx::Error> {
+    sqlx::query_as::<_, Song>(
+        r#"
+        SELECT id, name, description, author, added, length, path
+        FROM songs
+        WHERE id = ?1
+        "#,
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
 }
 
 pub async fn get_recent_songs(pool: &sqlx::SqlitePool, limit: i64) -> Result<Vec<Song>, sqlx::Error> {
@@ -170,6 +160,114 @@ pub async fn get_playlist(pool: &sqlx::SqlitePool, id: i64) -> Result<Playlist, 
         .await
 }
 
+pub struct Queue {
+    songs: Vec<Song>,
+    current_index: Option<usize>,
+}
+
+pub async fn create_queue(
+    pool: &sqlx::SqlitePool,
+    count: usize,
+) -> Result<Queue, sqlx::Error> {
+    let songs = sqlx::query_as::<_, Song>(
+        r#"
+        SELECT id, name, description, author, added, length, path, 
+               play_count, last_played, cover
+        FROM songs
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    if songs.is_empty() {
+        return Ok(Queue {
+            songs: vec![],
+            current_index: None,
+        });
+    }
+
+    let now = Utc::now();
+
+    let mut pool: Vec<(Song, f64)> = songs
+        .into_iter()
+        .map(|song| {
+            let weight = calculate_weight(&song, now);
+            (song, weight)
+        })
+        .collect();
+
+    let mut queue = Vec::with_capacity(count.min(pool.len()));
+    let mut rng = rand::rngs::ThreadRng::default();
+
+    for _ in 0..count {
+        if pool.is_empty() {
+            break;
+        }
+
+        let total_weight: f64 = pool.iter().map(|(_, w)| *w).sum();
+
+        if total_weight <= 0.0 {
+            break;
+        }
+
+        let mut pick = rand::random_range(0.0..total_weight);
+        let mut chosen_index = 0;
+
+        for (i, (_, weight)) in pool.iter().enumerate() {
+            if pick < *weight {
+                chosen_index = i;
+                break;
+            }
+            pick -= weight;
+        }
+
+        let (song, _) = pool.swap_remove(chosen_index);
+        queue.push(song);
+    }
+
+    Ok(Queue {
+        songs: queue.clone(),
+        current_index: if queue.is_empty() { None } else { Some(0) },
+    })
+}
+
+fn calculate_weight(song: &Song, now: DateTime<Utc>) -> f64 {
+    let days_since = match &song.last_played {
+        Some(last_played) => {
+            match DateTime::parse_from_rfc3339(last_played) {
+                Ok(dt) => (now - dt.with_timezone(&Utc)).num_days() as f64,
+                Err(_) => 999.0,
+            }
+        }
+        None => 999.0, // never played
+    };
+
+    let mut weight = 1.0;
+
+    // Boost recently played songs (last 14 days)
+    if days_since < 14.0 {
+        weight += 2.2 * (1.0 - days_since / 14.0);
+    }
+
+    // Boost favorites
+    if song.play_count >= 8 {
+        weight += 1.6;
+    }
+
+    // Boost new / rarely played songs
+    if song.play_count <= 2 {
+        weight += 1.9;
+    }
+
+    // Strong penalty if played in the last 2 days
+    if days_since < 2.0 {
+        weight *= 0.25;
+    }
+
+    weight.max(0.05)
+}
+
+
 pub async fn get_playlist_songs(pool: &sqlx::SqlitePool, playlist_id: i64) -> Result<Vec<Song>, sqlx::Error> {
     sqlx::query_as::<_, Song>(
         r#"
@@ -196,8 +294,51 @@ pub async fn create_playlist(pool: &sqlx::SqlitePool, name: &str, description: &
     Ok(id)
 }
 
+pub async fn delete_playlist(pool: &sqlx::SqlitePool, playlist_id: i64) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+            DELETE FROM playlists WHERE id = ?1
+        "#
+    )
+        .bind(playlist_id)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
+pub async fn add_to_playlist(
+    pool: &sqlx::SqlitePool,
+    playlist_id: i64,
+    song_id: i64,
+) -> Result<(), sqlx::Error> {
+    let next_pos: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COALESCE(MAX(position), 0) + 1
+        FROM playlist_songs
+        WHERE playlist_id = ?
+        "#,
+    )
+    .bind(playlist_id)
+    .fetch_one(pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO playlist_songs (playlist_id, song_id, position)
+        VALUES (?, ?, ?)
+        "#,
+    )
+    .bind(playlist_id)
+    .bind(song_id)
+    .bind(next_pos)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 pub async fn update_song_field(pool: &sqlx::SqlitePool, id: i64, field: &str, value: &str) -> Result<(), sqlx::Error> {
-    // whitelist columns — never interpolate `field` from user input directly into SQL otherwise
     let column = match field {
         "name" | "description" | "author" | "added" => field,
         _ => return Err(sqlx::Error::ColumnNotFound(field.to_string())),

@@ -2,6 +2,7 @@ import { X, Minus, Square, Copy } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
+
 const appWindow = getCurrentWindow();
 
 export default function Decoration() {

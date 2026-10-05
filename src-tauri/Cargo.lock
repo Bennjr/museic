@@ -2499,6 +2499,7 @@ name = "museic"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "rand 0.10.3",
  "rodio",
  "serde",
  "serde_json",
