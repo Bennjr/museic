@@ -226,9 +226,6 @@ pub async fn update_song_field(
         .map_err(|e| e.to_string())
 }
 
-
 // ══════════════════════════════════════
 //  DATABASE
 // ══════════════════════════════════════
-
-pub 
