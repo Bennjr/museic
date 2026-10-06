@@ -1,14 +1,23 @@
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 
-export async function openSettings() {
+export async function openSettings(section?: string) {
+    const url = section ? `/settings?section=${section}` : "/settings";
+
     const existing = await WebviewWindow.getByLabel("settings");
     if (existing) {
-        await existing.setFocus();
+        try {
+            await existing.setFocus();
+            if (section) {
+                await existing.emit("navigate-settings", { section });
+            }
+        } catch (e) {
+            console.error("failed to focus settings window", e);
+        }
         return;
     }
 
     const settings = new WebviewWindow("settings", {
-        url: "/settings",
+        url,
         title: "Settings",
         width: 800,
         height: 600,

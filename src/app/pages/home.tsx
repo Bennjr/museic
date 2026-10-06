@@ -28,7 +28,7 @@ export default function Home() {
     const player = usePlayer();
 
     return (
-        <div className="w-full h-full bg-gradient-to-br from-background from-40% via-[#121212] to-[#1a1520]">
+        <div className="w-full h-full gradient-default scroll-smooth overflow-y-auto">
             <div className="flex flex-col gap-16 p-8">
                 <h1 className="text-4xl font-bold">Home</h1>
 

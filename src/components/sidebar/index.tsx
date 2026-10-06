@@ -14,7 +14,7 @@ function NavItem({ to, icon: Icon, label }: { to: string; icon: React.ElementTyp
             to={to}
             end={to === "/"}
             className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full text-left ${isActive ? "bg-white/10 text-white" : "text-c-text/70 hover:bg-white/5 hover:text-white"
+                `nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg w-full text-left ${isActive ? "nav-item-active text-white" : "text-c-text/70 hover:text-white"
                 }`
             }
         >
@@ -148,7 +148,7 @@ export default function Sidebar() {
                                             <button
                                                 onClick={() => navigate(url)}
                                                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group w-full text-left ${active
-                                                    ? "bg-white/10 text-white"
+                                                    ? "bg-white/10 text-white gradient-button"
                                                     : "text-c-text/70 hover:bg-white/5 hover:text-white"
                                                     }`}
                                             >

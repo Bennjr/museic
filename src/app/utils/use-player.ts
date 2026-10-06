@@ -12,6 +12,19 @@ export type Song = {
     path: string;
 };
 
+interface s {
+    id: number;
+    name: string;
+    description: string | null;
+    play_count: number;
+    last_played: string | null;
+    author: string | null;
+    added: string | null;
+    length: string | null;
+    path: string;
+    cover: string | null;
+}
+
 export function usePlayer() {
     const [state, setState] = useState({
         position: 0,

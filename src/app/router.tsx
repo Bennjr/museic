@@ -8,6 +8,7 @@ import Account from "./pages/account";
 import Add from "./pages/add";
 import Songs from "./pages/songs";
 import Settings from "./pages/settings";
+import Search from "./pages/search";
 
 
 export default function Router() {
@@ -21,6 +22,7 @@ export default function Router() {
                 <Route path="playlist/:id" element={<Playlist />} />
                 <Route path="account" element={<Account />} />,
                 <Route path="settings" element={<Settings />} />
+                <Route path="search" element={<Search />} />
                 <Route path="add" element={<Add />} />
                 <Route path="*" element={<Home />} />
             </Route>

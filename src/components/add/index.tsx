@@ -10,7 +10,7 @@ export default function AddButton() {
         <button
             onClick={() => navigate("/add")}
             aria-label="Add music"
-            className={`size-12 rounded-full flex items-center justify-center shadow-lg transition-colors ${isActive
+            className={`size-12 rounded-full flex items-center justify-center shadow-lg transition-colors active:scale-90 transition-default ${isActive
                 ? "bg-white text-black"
                 : "bg-accent text-white hover:bg-white hover:text-black"
                 }`}

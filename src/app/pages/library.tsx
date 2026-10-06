@@ -1,6 +1,6 @@
 export default function Library() {
     return (
-        <div>
+        <div className="gradient-default">
             <p>library</p>
         </div>
     )

@@ -229,3 +229,50 @@ pub async fn update_song_field(
 // ══════════════════════════════════════
 //  DATABASE
 // ══════════════════════════════════════
+
+#[tauri::command]
+pub async fn search_songs(
+    query: String,
+    pool: tauri::State<'_, sqlx::SqlitePool>,
+) -> Result<Vec<types::Song>, String> {
+    if query.trim().is_empty() {
+        return Ok(vec![]);
+    }
+    db::search_songs(&pool, &query, 30)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn search_playlists(
+    query: String,
+    pool: tauri::State<'_, sqlx::SqlitePool>,
+) -> Result<Vec<types::Playlist>, String> {
+    if query.trim().is_empty() {
+        return Ok(vec![]);
+    }
+    db::search_playlists(&pool, &query, 10)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_n_songs(
+    pool: tauri::State<'_, sqlx::SqlitePool>,
+    n: i64,
+) -> Result<Vec<types::Song>, String> {
+    db::get_songs_range(&pool, 0, n)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_songs_range(
+    pool: tauri::State<'_, sqlx::SqlitePool>,
+    offset: i64,
+    limit: i64,
+) -> Result<Vec<types::Song>, String> {
+    db::get_songs_range(&pool, offset, limit)
+        .await
+        .map_err(|e| e.to_string())
+}

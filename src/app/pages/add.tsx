@@ -15,28 +15,30 @@ export default function Add() {
     const [source, setSource] = useState<Source>("local");
 
     return (
-        <div className="p-6 md:p-8 max-w-2xl mx-auto flex flex-col gap-8">
-            <div>
-                <h1 className="text-2xl font-bold">Add music</h1>
-                <p className="text-sm opacity-50 mt-1">Import songs from your computer or a link</p>
-            </div>
+        <div className="w-full h-full gradient-default">
+            <div className="p-6 md:p-8 max-w-2xl mx-auto flex flex-col gap-8">
+                <div>
+                    <h1 className="text-2xl font-bold">Add music</h1>
+                    <p className="text-sm opacity-50 mt-1">Import songs from your computer or a link</p>
+                </div>
 
-            <div className="flex p-1 bg-white/5 rounded-xl">
-                {sources.map(({ id, label, icon: Icon }) => (
-                    <button
-                        key={id}
-                        onClick={() => setSource(id)}
-                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${source === id ? "bg-white/10 text-white shadow-sm" : "text-white/50 hover:text-white/80"
-                            }`}
-                    >
-                        <Icon className="size-4" />
-                        {label}
-                    </button>
-                ))}
-            </div>
+                <div className="flex p-1 bg-white/5 rounded-xl">
+                    {sources.map(({ id, label, icon: Icon }) => (
+                        <button
+                            key={id}
+                            onClick={() => setSource(id)}
+                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${source === id ? "bg-white/10 text-white shadow-sm" : "text-white/50 hover:text-white/80"
+                                }`}
+                        >
+                            <Icon className="size-4" />
+                            {label}
+                        </button>
+                    ))}
+                </div>
 
-            <div className="min-h-64">
-                {source === "local" ? <LocalImport /> : <LinkImport />}
+                <div className="min-h-64">
+                    {source === "local" ? <LocalImport /> : <LinkImport />}
+                </div>
             </div>
         </div>
     );

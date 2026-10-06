@@ -1,16 +1,17 @@
-mod utils;
 mod types;
+mod utils;
 
-use utils::{music, db, commands};
+use utils::{commands, db, music};
 
-use tauri::Manager;
 use std::sync::Mutex;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir().expect("no app data dir");
             std::fs::create_dir_all(&app_data_dir).ok();
@@ -47,6 +48,10 @@ pub fn run() {
             commands::delete_playlist,
             commands::add_to_playlist,
             commands::get_current_song,
+            commands::search_songs,
+            commands::search_playlists,
+            commands::get_n_songs,
+            commands::get_songs_range,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
