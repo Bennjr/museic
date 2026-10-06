@@ -57,12 +57,16 @@ pub fn playback(
 }
 
 #[tauri::command]
-pub fn get_progress(audio: tauri::State<music::AudioHandle>) -> types::Progress {
+pub fn get_progress(
+    audio: tauri::State<music::AudioHandle>,
+    current: tauri::State<types::CurrentSong>,
+) -> types::Progress {
     let (pos, dur, paused) = audio.get_progress();
     types::Progress {
         position_secs: pos.as_secs_f64(),
         duration_secs: dur.map(|d| d.as_secs_f64()),
         is_paused: paused,
+        current_song_id: *current.0.lock().unwrap(),
     }
 }
 
@@ -95,6 +99,17 @@ pub async fn play_song_from_db(
 // ══════════════════════════════════════
 //  DATABASE
 // ══════════════════════════════════════
+
+#[tauri::command]
+pub async fn get_song(
+    id: i64,
+    pool: tauri::State<'_, sqlx::SqlitePool>,
+) -> Result<types::Song, String> {
+    db::get_song(&pool, id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "song not found".to_string())
+}
 
 #[tauri::command]
 pub async fn add_local_song(

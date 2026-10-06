@@ -24,7 +24,7 @@ export default function PlayBar({ position, duration, onSeek }: {
 
     const commit = () => {
         const v = dragRef.current;
-        if (v === null) return; // already committed, ignore duplicate events
+        if (v === null) return;
         dragRef.current = null;
         setDragValue(null);
         onSeek(v);

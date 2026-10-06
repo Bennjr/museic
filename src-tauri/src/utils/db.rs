@@ -25,7 +25,6 @@ pub async fn init_db(app_data_dir: &Path) -> Result<SqlitePool, sqlx::Error> {
 
     sqlx::query(
         r#"
-        DROP TABLE IF EXISTS songs;
         CREATE TABLE IF NOT EXISTS songs (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
@@ -105,7 +104,10 @@ pub async fn add_song(
 
 // TODO, FIND HASH OF mp3 AND ADD IT ALONG WITH THE OTHER INFO
 pub async fn get_song(pool: &sqlx::SqlitePool, id: i64) -> Result<Option<Song>, sqlx::Error> {
-    let sql = format!("SELECT {SONG_COLUMNS} FROM songs WHERE id = ?1");
+    let sql = format!(
+        "SELECT {SONG_COLUMNS} FROM songs \
+        WHERE id = ?1"
+    );
     sqlx::query_as::<_, Song>(&sql)
         .bind(id)
         .fetch_optional(pool)

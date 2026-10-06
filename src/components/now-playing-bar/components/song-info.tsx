@@ -7,7 +7,6 @@ export function SongInfo({ song }: { song: Song | null }) {
         return str.slice(0, max).trimEnd() + "…";
     }
 
-
     if (!song) return <div className="text-sm opacity-40">Nothing playing</div>;
 
     return (

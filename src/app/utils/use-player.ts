@@ -2,17 +2,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
-type Progress = { position_secs: number; duration_secs: number | null; is_paused: boolean };
-
-export type Song = {
-    id: number;
-    name: string;
-    description?: string | null;
-    author?: string | null;
-    path: string;
+type Progress = {
+    position_secs: number;
+    duration_secs: number | null;
+    is_paused: boolean;
+    current_song_id: number | null;
 };
 
-interface s {
+export type Song = {
     id: number;
     name: string;
     description: string | null;
@@ -36,6 +33,7 @@ export function usePlayer() {
     const ignorePollsUntil = useRef(0);
     const inFlight = useRef(false);
     const inFlightSince = useRef(0);
+    const lastSongId = useRef<number | null>(null);
 
     const refresh = useCallback(async () => {
         if (inFlight.current && Date.now() - inFlightSince.current < 2000) return;
@@ -43,24 +41,29 @@ export function usePlayer() {
         inFlightSince.current = Date.now();
         try {
             const p = await invoke<Progress>("get_progress");
+
             setState((s) => ({
                 ...s,
                 position: Date.now() < ignorePollsUntil.current ? s.position : p.position_secs,
                 duration: p.duration_secs ?? s.duration,
                 playing: !p.is_paused,
             }));
+
+            // only hit the DB for the full song when the id actually changes
+            if (p.current_song_id !== lastSongId.current) {
+                lastSongId.current = p.current_song_id;
+                if (p.current_song_id === null) {
+                    setState((s) => ({ ...s, currentSong: null, duration: 0, position: 0 }));
+                } else {
+                    const song = await invoke<Song>("get_song", { id: p.current_song_id });
+                    setState((s) => ({ ...s, currentSong: song }));
+                }
+            }
         } catch (e) {
             console.error(e);
         } finally {
             inFlight.current = false;
         }
-    }, []);
-
-    // Load current song once on mount (handles page refresh / hot reload)
-    useEffect(() => {
-        invoke<Song | null>("get_current_song")
-            .then((song) => setState((s) => ({ ...s, currentSong: song })))
-            .catch(console.error);
     }, []);
 
     useEffect(() => {
@@ -69,19 +72,17 @@ export function usePlayer() {
         return () => clearInterval(id);
     }, [refresh]);
 
-    const playSong = useCallback(async (id: number) => {
-        try {
-            const song = await invoke<Song>("play_song_from_db", { id });
-            setState((s) => ({
-                ...s,
-                currentSong: song,
-                playing: true,
-                position: 0,
-            }));
-        } catch (e) {
-            console.error(e);
-        }
-    }, []);
+    const playSong = useCallback(
+        async (id: number) => {
+            try {
+                await invoke("play_song_from_db", { id });
+                await refresh(); // pulls the new song immediately instead of waiting for the next tick
+            } catch (e) {
+                console.error(e);
+            }
+        },
+        [refresh]
+    );
 
     const seek = useCallback(async (secs: number) => {
         ignorePollsUntil.current = Date.now() + 600;

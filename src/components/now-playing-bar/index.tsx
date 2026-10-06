@@ -53,7 +53,7 @@ export default function NowPlayingBar() {
                     <PlayBar position={player.position} duration={player.duration} onSeek={seek} />
 
                     <div className="flex flex-row items-center gap-2 shrink-0">
-                        <Options />
+                        <Options currentSong={player.currentSong} />
                         <button className={iconBtn} aria-label="Expand" onClick={() => setExpanded(true)}>
                             <ChevronUp size={18} />
                         </button>

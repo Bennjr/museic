@@ -28,6 +28,7 @@ pub struct Progress {
     pub position_secs: f64,
     pub duration_secs: Option<f64>,
     pub is_paused: bool,
+    pub current_song_id: Option<i64>,
 }
 
 pub enum ePlayback {
