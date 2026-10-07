@@ -53,6 +53,7 @@ pub fn run() {
             commands::get_n_songs,
             commands::get_songs_range,
             commands::get_song,
+            commands::get_songs_by_sort,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

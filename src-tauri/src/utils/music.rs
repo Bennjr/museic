@@ -1,7 +1,7 @@
+use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player, Source};
 use std::fs::File;
-use rodio::{Decoder, Source, DeviceSinkBuilder, Player};
-use std::thread;
 use std::sync::mpsc::{self, Sender};
+use std::thread;
 use std::time::Duration;
 
 pub enum AudioCommand {
@@ -51,46 +51,85 @@ impl AudioHandle {
     }
 }
 
+fn open_output(volume: f32) -> Option<(MixerDeviceSink, Player)> {
+    for _ in 0..5 {
+        match DeviceSinkBuilder::open_default_sink() {
+            Ok(sink) => {
+                let player = Player::connect_new(&sink.mixer());
+                player.set_volume(volume);
+                return Some((sink, player));
+            }
+            Err(e) => {
+                eprintln!("failed to open audio device: {e}");
+                thread::sleep(Duration::from_millis(200));
+            }
+        }
+    }
+    None
+}
+
 pub fn spawn_audio_thread() -> AudioHandle {
     let (tx, rx) = mpsc::channel::<AudioCommand>();
 
     thread::spawn(move || {
-        let handle = DeviceSinkBuilder::open_default_sink()
-            .expect("open default audio stream");
-        let player = Player::connect_new(&handle.mixer());
+        let mut volume: f32 = 1.0;
+        let mut output = open_output(volume);
         let mut current_duration: Option<Duration> = None;
 
         for command in rx {
             match command {
-                AudioCommand::Play(path) => match File::open(&path) {
-                    Ok(file) => match Decoder::try_from(file) {
-                        Ok(source) => {
-                            current_duration = source.total_duration();
-                            player.clear();
-                            player.append(source);
-                            player.play();
+                AudioCommand::Play(path) => {
+                    drop(output.take());
+                    output = open_output(volume);
+
+                    if let Some((_, player)) = &output {
+                        match File::open(&path) {
+                            Ok(file) => match Decoder::try_from(file) {
+                                Ok(source) => {
+                                    current_duration = source.total_duration();
+                                    player.append(source);
+                                    player.play();
+                                }
+                                Err(e) => eprintln!("failed to decode {path}: {e}"),
+                            },
+                            Err(e) => eprintln!("failed to open {path}: {e}"),
                         }
-                        Err(e) => eprintln!("failed to decode {path}: {e}"),
-                    },
-                    Err(e) => eprintln!("failed to open {path}: {e}"),
-                },
-
-                AudioCommand::Pause => player.pause(),
-                AudioCommand::Resume => player.play(),
-
-                AudioCommand::SetVolume(v) => player.set_volume(v as _),
-                AudioCommand::GetProgress(reply) => {
-                    let pos = player.get_pos();
-                    let _ = reply.send((pos, current_duration, player.is_paused()));
-                }
-
-                AudioCommand::SeekTo(pos) => {
-                    if let Err(e) = player.try_seek(pos) {
-                        eprintln!("seek failed: {e}");
                     }
                 }
 
-                AudioCommand::Stop => player.stop(),
+                AudioCommand::Pause => {
+                    if let Some((_, p)) = &output {
+                        p.pause();
+                    }
+                }
+                AudioCommand::Resume => {
+                    if let Some((_, p)) = &output {
+                        p.play();
+                    }
+                }
+                AudioCommand::SetVolume(v) => {
+                    volume = v as f32;
+                    if let Some((_, p)) = &output {
+                        p.set_volume(volume);
+                    }
+                }
+                AudioCommand::GetProgress(reply) => {
+                    if let Some((_, p)) = &output {
+                        let _ = reply.send((p.get_pos(), current_duration, p.is_paused()));
+                    }
+                }
+                AudioCommand::SeekTo(pos) => {
+                    if let Some((_, p)) = &output {
+                        if let Err(e) = p.try_seek(pos) {
+                            eprintln!("seek failed: {e}");
+                        }
+                    }
+                }
+                AudioCommand::Stop => {
+                    if let Some((_, p)) = &output {
+                        p.stop();
+                    }
+                }
             }
         }
     });

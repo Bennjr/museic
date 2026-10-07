@@ -1,6 +1,8 @@
 use std::sync::Mutex;
 use std::time::Duration;
 
+use sqlx::pool;
+
 use super::{db, music};
 use crate::types;
 
@@ -254,6 +256,18 @@ pub async fn search_songs(
         return Ok(vec![]);
     }
     db::search_songs(&pool, &query, 30)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_songs_by_sort(
+    pool: tauri::State<'_, sqlx::SqlitePool>,
+    sort_by: String,
+    offset: i64,
+    limit: i64,
+) -> Result<Vec<types::Song>, String> {
+    db::get_songs_by_sort(&pool, &sort_by, offset, limit)
         .await
         .map_err(|e| e.to_string())
 }

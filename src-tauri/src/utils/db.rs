@@ -1,6 +1,9 @@
 use chrono::{DateTime, Utc};
 use rand::Rng;
-use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
+use sqlx::{
+    pool,
+    sqlite::{SqlitePool, SqlitePoolOptions},
+};
 use std::path::Path;
 
 use crate::types::{Playlist, Song, SONG_COLUMNS};
@@ -303,6 +306,37 @@ pub async fn get_songs_range(
     let sql = format!(
         "SELECT {SONG_COLUMNS} FROM songs \
          ORDER BY id DESC \
+         LIMIT ?1 OFFSET ?2"
+    );
+
+    sqlx::query_as::<_, Song>(&sql)
+        .bind(limit)
+        .bind(from)
+        .fetch_all(pool)
+        .await
+}
+
+pub async fn get_songs_by_sort(
+    pool: &SqlitePool,
+    sort_by: &str,
+    offset: i64,
+    limit: i64,
+) -> Result<Vec<Song>, sqlx::Error> {
+    let from = offset.max(0);
+    let limit = limit.max(0);
+
+    let order_clause = match sort_by {
+        "recent" => "ORDER BY id DESC",
+        "popular" => "ORDER BY play_count DESC, id DESC",
+        "recently_played" => "WHERE last_played IS NOT NULL ORDER BY last_played DESC",
+        "never_played" => "WHERE play_count = 0 ORDER BY id DESC",
+        "all" => "ORDER BY id DESC",
+        _ => return Err(sqlx::Error::ColumnNotFound(sort_by.to_string())),
+    };
+
+    let sql = format!(
+        "SELECT {SONG_COLUMNS} FROM songs \
+         {order_clause} \
          LIMIT ?1 OFFSET ?2"
     );
 

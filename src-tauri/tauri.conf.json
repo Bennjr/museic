@@ -25,8 +25,8 @@
       {
         "title": "Settings",
         "label": "Settings",
-        "width": 800,
-        "height": 600,
+        "width": 600,
+        "height": 800,
         "decorations": false,
         "shadow": false,
         "center": true,

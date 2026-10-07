@@ -34,7 +34,6 @@ export default function Sidebar() {
     const [creating, setCreating] = useState(false);
     const [newName, setNewName] = useState("");
 
-    const [isMaximized, setIsMaximized] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
     const loadPlaylists = () =>

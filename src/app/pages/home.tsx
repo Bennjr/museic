@@ -30,7 +30,6 @@ export default function Home() {
     return (
         <div className="w-full h-full gradient-default scroll-smooth overflow-y-auto">
             <div className="flex flex-col gap-16 p-8">
-                <h1 className="text-4xl font-bold">Home</h1>
 
                 <SongRow title="Most recent" songs={recent.songs} loading={recent.loading} onPlay={player.playSong} />
 
@@ -44,10 +43,10 @@ export default function Home() {
                                 <button
                                     key={song.id}
                                     onClick={() => player.playSong(song.id)}
-                                    className="flex items-center gap-3 p-2 bg-foreground rounded-sm text-left hover:bg-white/10 transition-colors"
+                                    className="flex items-center gap-3 p-2 bg-foreground rounded-sm text-left hover:bg-white/10 transition-colors min-w-0 overflow-hidden"
                                 >
                                     <div className="size-12 bg-blue-500 rounded-lg shrink-0" />
-                                    <div className="min-w-0">
+                                    <div className="min-w-0 flex-1 overflow-hidden">
                                         <p className="font-medium truncate">{song.name}</p>
                                         <p className="text-sm text-c-text/70 truncate">{song.description}</p>
                                     </div>
@@ -87,7 +86,10 @@ export default function Home() {
 }
 
 function SongRow({ title, songs, loading, onPlay }: {
-    title: string; songs: Song[]; loading: boolean; onPlay: (id: number) => void;
+    title: string;
+    songs: Song[];
+    loading: boolean;
+    onPlay: (id: number) => void;
 }) {
     return (
         <section>
@@ -95,17 +97,21 @@ function SongRow({ title, songs, loading, onPlay }: {
             {songs.length === 0 && !loading ? (
                 <EmptyState text="Nothing here yet" />
             ) : (
-                <div className="flex flex-row gap-4">
+                <div className="flex flex-row gap-4 overflow-x-auto">
                     {songs.map((song) => (
-                        <div key={song.id} className="flex flex-col gap-2 group cursor-pointer" onClick={() => onPlay(song.id)}>
-                            <div className="relative 2xl:size-56 size-36 bg-foreground rounded-lg shrink-0 overflow-hidden">
+                        <div
+                            key={song.id}
+                            className="flex flex-col gap-2 group cursor-pointer w-36 2xl:w-56 shrink-0"
+                            onClick={() => onPlay(song.id)}
+                        >
+                            <div className="relative size-36 2xl:size-56 bg-foreground rounded-lg overflow-hidden">
                                 <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                     <div className="size-12 rounded-full bg-black/90 flex items-center justify-center shadow-lg">
-                                        <Play className="size-6 text-white fill-black ml-0.5" />
+                                        <Play className="size-6 text-white fill-white ml-0.5" />
                                     </div>
                                 </div>
                             </div>
-                            <p className="text-sm truncate">{song.name}</p>
+                            <p className="text-sm truncate w-full">{song.name}</p>
                         </div>
                     ))}
                 </div>

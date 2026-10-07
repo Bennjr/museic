@@ -20,7 +20,7 @@ export async function openSettings(section?: string) {
         url,
         title: "Settings",
         width: 800,
-        height: 600,
+        height: 700,
         center: true,
         decorations: false,
         transparent: true,

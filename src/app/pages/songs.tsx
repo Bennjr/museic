@@ -1,6 +1,6 @@
 import { Play } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface Song {
     id: number;
@@ -12,27 +12,40 @@ interface Song {
     path: string;
 }
 
+type Sort = "all" | "recently_played" | "popular" | "never_played";
+
+const tabs: { key: Sort; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "recently_played", label: "Recent" },
+    { key: "popular", label: "Most played" },
+    { key: "never_played", label: "Never played" },
+];
+
 const PAGE_SIZE = 20;
 
 export default function Songs() {
     const [songs, setSongs] = useState<Song[]>([]);
     const [loading, setLoading] = useState(false);
     const [hasMore, setHasMore] = useState(true);
+    const [sort, setSort] = useState<Sort>("all");
+    const requestId = useRef(0);
 
-    const loadMore = async () => {
-        if (loading || !hasMore) return;
+    const fetchPage = async (sortBy: Sort, offset: number) => {
+        const id = ++requestId.current;
         setLoading(true);
         try {
-            const next = await invoke<Song[]>("get_songs_range", {
-                offset: songs.length,
+            const next = await invoke<Song[]>("get_songs_by_sort", {
+                sortBy,
+                offset,
                 limit: PAGE_SIZE,
             });
-            setSongs((prev) => [...prev, ...next]);
-            if (next.length < PAGE_SIZE) setHasMore(false);
+            if (id !== requestId.current) return;
+            setSongs((prev) => (offset === 0 ? next : [...prev, ...next]));
+            setHasMore(next.length === PAGE_SIZE);
         } catch (e) {
-            console.error(e);
+            if (id === requestId.current) console.error(e);
         } finally {
-            setLoading(false);
+            if (id === requestId.current) setLoading(false);
         }
     };
 
@@ -44,13 +57,32 @@ export default function Songs() {
     const playSong = (songId: number) => invoke("play_song_from_db", { id: songId }).catch(console.error);
 
     useEffect(() => {
-        loadMore();
-    }, []);
+        fetchPage(sort, 0);
+    }, [sort]);
+
+    const loadMore = () => {
+        if (loading || !hasMore) return;
+        fetchPage(sort, songs.length);
+    };
 
     return (
         <div className="gradient-default w-screen h-screen">
             <div className="p-4">
-                <h1 className="text-2xl font-bold">Songs</h1>
+                <div className="flex flex-row justify-between items-center gap-4 py-2">
+                    <h1 className="text-2xl font-bold">Songs</h1>
+                    <div className="w-full flex flex-row gap-2">
+                        {tabs.map((t) => (
+                            <button
+                                key={t.key}
+                                onClick={() => setSort(t.key)}
+                                className={`w-32 p-2 rounded-md ${sort === t.key ? "bg-white/30" : "bg-white/10 hover:bg-white/20"
+                                    }`}
+                            >
+                                {t.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
                 <ul className="flex flex-col">
                     {songs.map((song, i) => (
                         <li key={song.id} className="group grid grid-cols-[16px_1fr_1fr_120px_80px] gap-4 px-3 py-2 rounded-md hover:bg-white/5 transition-colors items-center">
@@ -95,7 +127,7 @@ export default function Songs() {
                 </ul>
                 <div className="flex justify-center py-4">
                     {hasMore && (
-                        <button onClick={loadMore} disabled={loading}>
+                        <button onClick={loadMore} disabled={loading} className="btn-accent">
                             Load more
                         </button>
                     )}
