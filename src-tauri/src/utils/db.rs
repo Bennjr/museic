@@ -414,18 +414,18 @@ pub async fn get_playlist_songs(
     pool: &sqlx::SqlitePool,
     playlist_id: i64,
 ) -> Result<Vec<Song>, sqlx::Error> {
-    sqlx::query_as::<_, Song>(
-        r#"
-        SELECT s.id, s.name, s.description, s.author, s.added, s.length, s.path
+    let sql = format!(
+        "SELECT {SONG_COLUMNS} \
         FROM songs s
         JOIN playlist_songs ps ON ps.song_id = s.id
         WHERE ps.playlist_id = ?1
-        ORDER BY ps.position
-        "#,
-    )
-    .bind(playlist_id)
-    .fetch_all(pool)
-    .await
+        ORDER BY ps.position"
+    );
+
+    sqlx::query_as::<_, Song>(&sql)
+        .bind(playlist_id)
+        .fetch_all(pool)
+        .await
 }
 
 pub async fn get_playlists(pool: &sqlx::SqlitePool) -> Result<Vec<Playlist>, sqlx::Error> {
