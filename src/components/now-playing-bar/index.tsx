@@ -6,7 +6,7 @@ import Options from "./components/options";
 import { SongInfo } from "./components/song-info"
 import PlayBar from "./components/play-bar";
 import NowPlayingExpanded from "./components/now-playing-expanded";
-import { usePlayer } from "../../app/utils/use-player";
+import { usePlayer } from "../../app/utils/player";
 
 const iconBtn = "p-2 rounded-full hover:bg-accent transition-default";
 

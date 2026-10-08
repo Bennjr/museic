@@ -1,9 +1,8 @@
+use sqlx::pool;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use sqlx::pool;
-
-use super::{db, music};
+use super::{db, music, tray};
 use crate::types;
 
 // ══════════════════════════════════════
@@ -75,6 +74,7 @@ pub fn get_progress(
 #[tauri::command]
 pub async fn play_song_from_db(
     id: i64,
+    app: tauri::AppHandle,
     db_pool: tauri::State<'_, sqlx::SqlitePool>,
     audio: tauri::State<'_, music::AudioHandle>,
     current: tauri::State<'_, types::CurrentSong>,
@@ -94,6 +94,10 @@ pub async fn play_song_from_db(
             .bind(id)
             .execute(db_pool.inner())
             .await;
+
+    if let Err(e) = tray::update_tray(&app, &song.name) {
+        eprintln!("failed to update tray: {e}");
+    }
 
     Ok(song)
 }

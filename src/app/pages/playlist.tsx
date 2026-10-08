@@ -2,11 +2,14 @@ import { Clock, Play, Trash } from "lucide-react";
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useParams } from "react-router-dom";
+import { deletePlaylist } from "../utils/playlist";
+import { useNavigate } from "react-router-dom";
 
 type Song = { id: number; name: string; description: string; author: string; added: string; length: string };
 type PlaylistMeta = { id: number; name: string; description: string; created: string };
 
 export default function Playlist() {
+    const navigate = useNavigate();
     const { id } = useParams();
     const playlistId = Number(id);
 
@@ -22,8 +25,8 @@ export default function Playlist() {
     }, [playlistId]);
 
     const delete_playlist = async () => {
-        invoke("delete_playlist", { id: playlistId })
-        setDeleted(true)
+        await deletePlaylist(playlistId);
+        navigate("/songs");
     }
 
     const updateSong = (songId: number, field: string, value: string) => {

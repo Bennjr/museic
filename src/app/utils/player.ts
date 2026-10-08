@@ -1,4 +1,3 @@
-// use-player.ts
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -49,7 +48,6 @@ export function usePlayer() {
                 playing: !p.is_paused,
             }));
 
-            // only hit the DB for the full song when the id actually changes
             if (p.current_song_id !== lastSongId.current) {
                 lastSongId.current = p.current_song_id;
                 if (p.current_song_id === null) {
@@ -76,7 +74,7 @@ export function usePlayer() {
         async (id: number) => {
             try {
                 await invoke("play_song_from_db", { id });
-                await refresh(); // pulls the new song immediately instead of waiting for the next tick
+                await refresh();
             } catch (e) {
                 console.error(e);
             }

@@ -1,4 +1,5 @@
 use std::sync::Mutex;
+use tauri::{menu::MenuItem, Wry};
 
 // ══════════════════════════════════════
 //  Song
@@ -50,4 +51,12 @@ pub struct Playlist {
     pub name: String,
     pub description: String,
     pub created: String,
+}
+
+// ══════════════════════════════════════
+//  Tray icon
+// ══════════════════════════════════════
+
+pub struct TrayItems {
+    pub current_song: MenuItem<Wry>,
 }

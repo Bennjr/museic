@@ -1,4 +1,4 @@
-import { Song } from "../../../app/utils/use-player"
+import { Song } from "../../../app/utils/player"
 
 export function SongInfo({ song }: { song: Song | null }) {
 

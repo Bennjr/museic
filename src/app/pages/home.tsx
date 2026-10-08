@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Play } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { usePlayer } from "../utils/use-player";
+import { usePlayer } from "../utils/player";
 
 type Song = { id: number; name: string; description: string; author: string; added: string; length: string };
 

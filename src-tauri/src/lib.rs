@@ -1,9 +1,10 @@
 mod types;
 mod utils;
 
-use utils::{commands, db, music};
+use utils::{commands, db, music, tray};
 
 use std::sync::Mutex;
+use tauri::tray::TrayIconBuilder;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -24,6 +25,8 @@ pub fn run() {
                 let pool = db::init_db(&app_data_dir).await.expect("db init failed");
                 app.manage(pool);
             });
+
+            tray::setup_tray(app.handle(), audio_handle.clone())?;
 
             Ok(())
         })
@@ -55,6 +58,12 @@ pub fn run() {
             commands::get_song,
             commands::get_songs_by_sort,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|_app_handle, event| match event {
+            tauri::RunEvent::ExitRequested { api, .. } => {
+                api.prevent_exit();
+            }
+            _ => {}
+        });
 }

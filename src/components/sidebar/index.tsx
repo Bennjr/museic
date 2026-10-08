@@ -1,12 +1,99 @@
 import { Home, ListMusic, LibraryBig, List, LayoutGrid, Rows3, Plus, Music } from "lucide-react";
-import { useEffect, useState, useRef } from "react";
+import { useState } from "react";
+import type { ComponentType } from "react";
 import { ResizableBox } from "react-resizable";
 import "react-resizable/css/styles.css";
-import { invoke } from "@tauri-apps/api/core";
-import { useNavigate, useLocation, NavLink } from "react-router-dom";
+import { usePlaylists, createPlaylist } from "../../app/utils/playlist";
+import type { Playlist } from "../../app/utils/playlist";
+import { useNavigate, useMatch, NavLink } from "react-router-dom";
 
-type Playlist = { id: number; name: string; description: string; created: string };
 type ViewMode = "list" | "compact" | "grid";
+
+type PlaylistViewProps = {
+    playlists: Playlist[];
+    activeId: number | null;
+    onSelect: (id: number) => void;
+};
+
+/* ---------- shared bits ---------- */
+
+const itemState = (active: boolean) =>
+    active
+        ? "bg-white/10 text-white gradient-button"
+        : "text-c-text/70 hover:bg-white/5 hover:text-white";
+
+function PlaylistCover({ className = "" }: { className?: string }) {
+    return <div className={`bg-blue-500 shrink-0 shadow-sm ${className}`} />;
+}
+
+/* ---------- view modes ---------- */
+
+function PlaylistList({ playlists, activeId, onSelect }: PlaylistViewProps) {
+    return (
+        <ul className="space-y-1">
+            {playlists.map((list) => (
+                <li key={list.id}>
+                    <button
+                        onClick={() => onSelect(list.id)}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group w-full text-left ${itemState(list.id === activeId)}`}
+                    >
+                        <PlaylistCover className="size-10 rounded-md" />
+                        <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate">{list.name}</p>
+                            <p className="text-xs text-c-text/50 truncate">{list.description}</p>
+                        </div>
+                    </button>
+                </li>
+            ))}
+        </ul>
+    );
+}
+
+function PlaylistCompact({ playlists, activeId, onSelect }: PlaylistViewProps) {
+    return (
+        <ul className="space-y-0.5">
+            {playlists.map((list) => (
+                <li key={list.id}>
+                    <button
+                        onClick={() => onSelect(list.id)}
+                        title={list.name}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors w-full text-left ${itemState(list.id === activeId)}`}
+                    >
+                        <PlaylistCover className="size-5 rounded" />
+                        <span className="text-sm truncate">{list.name}</span>
+                    </button>
+                </li>
+            ))}
+        </ul>
+    );
+}
+
+function PlaylistGrid({ playlists, activeId, onSelect }: PlaylistViewProps) {
+    return (
+        <ul className="grid grid-cols-2 gap-2 px-1">
+            {playlists.map((list) => (
+                <li key={list.id} className="min-w-0">
+                    <button
+                        onClick={() => onSelect(list.id)}
+                        title={list.name}
+                        className={`flex flex-col gap-1.5 p-2 rounded-lg transition-colors w-full text-left ${itemState(list.id === activeId)}`}
+                    >
+                        <PlaylistCover className="w-full aspect-square rounded-md" />
+                        <p className="text-xs font-medium truncate">{list.name}</p>
+                    </button>
+                </li>
+            ))}
+        </ul>
+    );
+}
+
+const VIEWS: Record<ViewMode, { component: ComponentType<PlaylistViewProps>; icon: typeof List; label: string }> = {
+    list: { component: PlaylistList, icon: List, label: "List view" },
+    compact: { component: PlaylistCompact, icon: Rows3, label: "Compact view" },
+    grid: { component: PlaylistGrid, icon: LayoutGrid, label: "Grid view" },
+};
+
+/* ---------- sidebar ---------- */
 
 function NavItem({ to, icon: Icon, label }: { to: string; icon: React.ElementType; label: string }) {
     return (
@@ -24,45 +111,40 @@ function NavItem({ to, icon: Icon, label }: { to: string; icon: React.ElementTyp
     );
 }
 
+function nextDefaultName(playlists: Playlist[]) {
+    const base = "New playlist";
+    const taken = new Set(playlists.map((p) => p.name));
+    if (!taken.has(base)) return base;
+    let n = 2;
+    while (taken.has(`${base} ${n}`)) n++;
+    return `${base} ${n}`;
+}
+
 export default function Sidebar() {
     const navigate = useNavigate();
-    const { pathname } = useLocation();
+    const match = useMatch("/playlist/:id");
+    const activeId = match ? Number(match.params.id) : null;
 
     const [width, setWidth] = useState(256);
     const [view, setView] = useState<ViewMode>("list");
-    const [playlists, setPlaylists] = useState<Playlist[]>([]);
     const [creating, setCreating] = useState(false);
-    const [newName, setNewName] = useState("");
 
-    const inputRef = useRef<HTMLInputElement>(null);
+    const playlists = usePlaylists();
 
-    const loadPlaylists = () =>
-        invoke<Playlist[]>("get_playlists").then(setPlaylists).catch(console.error);
-
-    useEffect(() => {
-        loadPlaylists();
-    }, []);
-
-    useEffect(() => {
-        if (creating) inputRef.current?.focus();
-    }, [creating]);
-
-    const submitNewPlaylist = async () => {
-        const name = newName.trim();
-        if (!name) {
-            setCreating(false);
-            return;
-        }
+    const handleCreate = async () => {
+        if (creating) return;
+        setCreating(true);
         try {
-            const id = await invoke<number>("create_playlist", { name, description: "" });
-            setNewName("");
-            setCreating(false);
-            await loadPlaylists();
+            const id = await createPlaylist(nextDefaultName(playlists));
             navigate(`/playlist/${id}`);
         } catch (e) {
             console.error(e);
+        } finally {
+            setCreating(false);
         }
     };
+
+    const ActiveView = VIEWS[view].component;
 
     return (
         <ResizableBox
@@ -96,72 +178,39 @@ export default function Sidebar() {
                             </div>
                             <div className="flex items-center gap-0.5">
                                 <button
-                                    onClick={() => setCreating(true)}
-                                    className="p-1.5 rounded-md text-c-text/50 hover:text-white hover:bg-white/10 transition-colors"
+                                    onClick={handleCreate}
+                                    disabled={creating}
+                                    className="p-1.5 rounded-md text-c-text/50 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50"
                                     aria-label="New playlist"
                                 >
                                     <Plus className="size-3.5" />
                                 </button>
-                                {(["list", "compact", "grid"] as ViewMode[]).map((mode) => (
-                                    <button
-                                        key={mode}
-                                        onClick={() => setView(mode)}
-                                        className={`p-1.5 rounded-md transition-colors ${view === mode ? "bg-white/15 text-white" : "text-c-text/50 hover:text-white"
-                                            }`}
-                                    >
-                                        {mode === "list" && <List className="size-3.5" />}
-                                        {mode === "compact" && <Rows3 className="size-3.5" />}
-                                        {mode === "grid" && <LayoutGrid className="size-3.5" />}
-                                    </button>
-                                ))}
+                                {(Object.keys(VIEWS) as ViewMode[]).map((mode) => {
+                                    const Icon = VIEWS[mode].icon;
+                                    return (
+                                        <button
+                                            key={mode}
+                                            onClick={() => setView(mode)}
+                                            aria-label={VIEWS[mode].label}
+                                            className={`p-1.5 rounded-md transition-colors ${view === mode ? "bg-white/15 text-white" : "text-c-text/50 hover:text-white"
+                                                }`}
+                                        >
+                                            <Icon className="size-3.5" />
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
 
-                        {creating && (
-                            <input
-                                ref={inputRef}
-                                value={newName}
-                                onChange={(e) => setNewName(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter") submitNewPlaylist();
-                                    if (e.key === "Escape") {
-                                        setCreating(false);
-                                        setNewName("");
-                                    }
-                                }}
-                                onBlur={submitNewPlaylist}
-                                placeholder="Playlist name"
-                                className="mx-3 mb-2 h-8 px-2 rounded-md bg-white/10 text-sm outline-none focus:bg-white/15"
-                            />
-                        )}
-
                         {playlists.length === 0 ? (
                             <p className="text-xs text-c-text/40 px-3">No playlists yet</p>
-                        ) : view === "list" ? (
-                            <ul className="space-y-1">
-                                {playlists.map((list) => {
-                                    const url = `/playlist/${list.id}`;
-                                    const active = pathname === url;
-                                    return (
-                                        <li key={list.id}>
-                                            <button
-                                                onClick={() => navigate(url)}
-                                                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group w-full text-left ${active
-                                                    ? "bg-white/10 text-white gradient-button"
-                                                    : "text-c-text/70 hover:bg-white/5 hover:text-white"
-                                                    }`}
-                                            >
-                                                <div className="size-10 rounded-md bg-blue-500 shrink-0 shadow-sm" />
-                                                <div className="min-w-0 flex-1">
-                                                    <p className="text-sm font-medium truncate">{list.name}</p>
-                                                    <p className="text-xs text-c-text/50 truncate">{list.description}</p>
-                                                </div>
-                                            </button>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
-                        ) : null}
+                        ) : (
+                            <ActiveView
+                                playlists={playlists}
+                                activeId={activeId}
+                                onSelect={(id) => navigate(`/playlist/${id}`)}
+                            />
+                        )}
                     </div>
                 </div>
             </aside>

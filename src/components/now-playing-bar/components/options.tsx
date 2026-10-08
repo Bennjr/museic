@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Plus, Repeat, Repeat1, Shuffle, Volume2, VolumeOff } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 
-import { Song } from "../../../app/utils/use-player"
+import { Song } from "../../../app/utils/player"
 
 type RepeatMode = "off" | "all" | "one";
 const nextRepeat: Record<RepeatMode, RepeatMode> = { off: "all", all: "one", one: "off" };
