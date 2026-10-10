@@ -17,6 +17,10 @@
     "dialog:default",
     "core:webview:allow-create-webview-window",
     "store:default",
-    "core:window:allow-set-focus"
+    "core:window:allow-set-focus",
+    "global-shortcut:default",
+    "global-shortcut:allow-is-registered",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister"
   ]
 }

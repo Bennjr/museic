@@ -19,8 +19,8 @@ export async function openSettings(section?: string) {
     const settings = new WebviewWindow("settings", {
         url,
         title: "Settings",
-        width: 800,
-        height: 700,
+        width: 1000,
+        height: 750,
         center: true,
         decorations: false,
         transparent: true,

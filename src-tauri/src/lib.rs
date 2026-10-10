@@ -1,10 +1,9 @@
 mod types;
 mod utils;
 
-use utils::{commands, db, music, tray};
+use utils::{commands, db, music, shortcuts, tray};
 
 use std::sync::Mutex;
-use tauri::tray::TrayIconBuilder;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -14,6 +13,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .setup(|app| {
+            let handle = app.handle().clone();
+
             let app_data_dir = app.path().app_data_dir().expect("no app data dir");
             std::fs::create_dir_all(&app_data_dir).ok();
 
@@ -26,7 +27,12 @@ pub fn run() {
                 app.manage(pool);
             });
 
-            tray::setup_tray(app.handle(), audio_handle.clone())?;
+            tray::setup_tray(&handle, audio_handle.clone())?;
+
+            #[cfg(desktop)]
+            {
+                shortcuts::shortcuts_setup(&handle);
+            }
 
             Ok(())
         })
