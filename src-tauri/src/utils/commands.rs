@@ -1,65 +1,45 @@
-use sqlx::pool;
-use std::sync::Mutex;
 use std::time::Duration;
 
-use super::{db, music, tray};
-use crate::types;
+use super::{audio, db};
+use crate::types::{self, Queue, QueueState};
 
 // ══════════════════════════════════════
 //  Song Playback
 // ══════════════════════════════════════
 
 #[tauri::command]
-pub fn play_song(path: String, audio: tauri::State<music::AudioHandle>) {
+pub fn play_song(path: String, audio: tauri::State<audio::AudioHandle>) {
     audio.play(path);
 }
 
 #[tauri::command]
-pub fn pause_song(audio: tauri::State<music::AudioHandle>) {
+pub fn pause_song(audio: tauri::State<audio::AudioHandle>) {
     audio.pause();
 }
 
 #[tauri::command]
-pub fn resume_song(audio: tauri::State<music::AudioHandle>) {
+pub fn resume_song(audio: tauri::State<audio::AudioHandle>) {
     audio.resume();
 }
 
 #[tauri::command]
-pub fn set_volume(volume: f32, audio: tauri::State<music::AudioHandle>) {
+pub fn set_volume(volume: f32, audio: tauri::State<audio::AudioHandle>) {
     audio.set_volume(volume);
 }
 
 #[tauri::command]
-pub fn seek_song(position_secs: f64, audio: tauri::State<music::AudioHandle>) {
+pub fn seek_song(position_secs: f64, audio: tauri::State<audio::AudioHandle>) {
     audio.seek(Duration::from_secs_f64(position_secs));
 }
 
 #[tauri::command]
-pub fn stop_song(audio: tauri::State<music::AudioHandle>) {
+pub fn stop_song(audio: tauri::State<audio::AudioHandle>) {
     audio.stop();
 }
 
 #[tauri::command]
-pub fn playback(
-    audio: tauri::State<music::AudioHandle>,
-    playback: types::ePlayback,
-) -> Result<(), String> {
-    match playback {
-        types::ePlayback::Play { path } => audio.play(&path),
-        types::ePlayback::Resume => audio.resume(),
-        types::ePlayback::Pause => audio.pause(),
-        types::ePlayback::Stop => audio.stop(),
-        types::ePlayback::Seek { position_secs } => {
-            audio.seek(Duration::from_secs_f64(position_secs))
-        }
-        types::ePlayback::SetVolume { volume } => audio.set_volume(volume),
-    }
-    Ok(())
-}
-
-#[tauri::command]
 pub fn get_progress(
-    audio: tauri::State<music::AudioHandle>,
+    audio: tauri::State<audio::AudioHandle>,
     current: tauri::State<types::CurrentSong>,
 ) -> types::Progress {
     let (pos, dur, paused) = audio.get_progress();
@@ -75,31 +55,114 @@ pub fn get_progress(
 pub async fn play_song_from_db(
     id: i64,
     app: tauri::AppHandle,
-    db_pool: tauri::State<'_, sqlx::SqlitePool>,
-    audio: tauri::State<'_, music::AudioHandle>,
+    pool: tauri::State<'_, sqlx::SqlitePool>,
+    audio: tauri::State<'_, audio::AudioHandle>,
     current: tauri::State<'_, types::CurrentSong>,
 ) -> Result<types::Song, String> {
-    let song = db::get_song(&db_pool, id)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Song {id} not found"))?;
+    db::play_from_db(&app, &pool, &audio, &current, id).await
+}
 
-    audio.play(&song.path);
+// ══════════════════════════════════════
+//  QUEUE MANAGEMENT
+// ══════════════════════════════════════
 
-    *current.0.lock().unwrap() = Some(id);
+#[tauri::command]
+pub async fn next_song(
+    app: tauri::AppHandle,
+    pool: tauri::State<'_, sqlx::SqlitePool>,
+    queue: tauri::State<'_, QueueState>,
+    audio: tauri::State<'_, audio::AudioHandle>,
+    current: tauri::State<'_, types::CurrentSong>,
+) -> Result<Option<types::Song>, String> {
+    Ok(db::next_song(&app, &pool, &queue, &audio, &current).await)
+}
 
-    let _ =
-        sqlx::query("UPDATE songs SET play_count = play_count + 1, last_played = ?1 WHERE id = ?2")
-            .bind(chrono::Local::now().to_rfc3339())
-            .bind(id)
-            .execute(db_pool.inner())
-            .await;
+#[tauri::command]
+pub async fn prev_song(
+    app: tauri::AppHandle,
+    pool: tauri::State<'_, sqlx::SqlitePool>,
+    queue: tauri::State<'_, QueueState>,
+    audio: tauri::State<'_, audio::AudioHandle>,
+    current: tauri::State<'_, types::CurrentSong>,
+) -> Result<Option<types::Song>, String> {
+    Ok(db::prev_song(&app, &pool, &queue, &audio, &current).await)
+}
 
-    if let Err(e) = tray::update_tray(&app, &song.name) {
-        eprintln!("failed to update tray: {e}");
-    }
+#[tauri::command]
+pub async fn navigate_queue(
+    to: i64,
+    app: tauri::AppHandle,
+    pool: tauri::State<'_, sqlx::SqlitePool>,
+    queue: tauri::State<'_, QueueState>,
+    audio: tauri::State<'_, audio::AudioHandle>,
+    current: tauri::State<'_, types::CurrentSong>,
+) -> Result<Option<types::Song>, String> {
+    Ok(db::navigate_queue(&app, &pool, &queue, &audio, &current, to).await)
+}
 
-    Ok(song)
+#[tauri::command]
+pub async fn shuffle(
+    app: tauri::AppHandle,
+    pool: tauri::State<'_, sqlx::SqlitePool>,
+    queue: tauri::State<'_, QueueState>,
+    audio: tauri::State<'_, audio::AudioHandle>,
+    current: tauri::State<'_, types::CurrentSong>,
+) -> Result<Queue, String> {
+    Ok(db::shuffle(&app, &pool, &queue, &audio, &current).await)
+}
+
+#[tauri::command]
+pub async fn play_songs(
+    song_ids: Vec<i64>,
+    start_index: usize,
+    app: tauri::AppHandle,
+    pool: tauri::State<'_, sqlx::SqlitePool>,
+    queue: tauri::State<'_, QueueState>,
+    audio: tauri::State<'_, audio::AudioHandle>,
+    current: tauri::State<'_, types::CurrentSong>,
+) -> Result<Option<types::Song>, String> {
+    db::play_songs(&app, &pool, &queue, &audio, &current, song_ids, start_index).await
+}
+
+#[tauri::command]
+pub async fn play_playlist(
+    playlist_id: i64,
+    start_index: Option<usize>,
+    shuffled: bool,
+    app: tauri::AppHandle,
+    pool: tauri::State<'_, sqlx::SqlitePool>,
+    queue: tauri::State<'_, QueueState>,
+    audio: tauri::State<'_, audio::AudioHandle>,
+    current: tauri::State<'_, types::CurrentSong>,
+) -> Result<Option<types::Song>, String> {
+    db::play_playlist(
+        &app,
+        &pool,
+        &queue,
+        &audio,
+        &current,
+        playlist_id,
+        start_index,
+        shuffled,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn add_to_queue(
+    song_id: i64,
+    app: tauri::AppHandle,
+    pool: tauri::State<'_, sqlx::SqlitePool>,
+    queue: tauri::State<'_, QueueState>,
+    audio: tauri::State<'_, audio::AudioHandle>,
+    current: tauri::State<'_, types::CurrentSong>,
+) -> Result<(), String> {
+    db::add_to_queue(&app, &pool, &queue, &audio, &current, song_id).await
+}
+
+#[tauri::command]
+pub fn get_queue(queue: tauri::State<'_, QueueState>) -> Queue {
+    queue.0.lock().unwrap().clone()
 }
 
 // ══════════════════════════════════════
@@ -132,18 +195,6 @@ pub async fn add_local_song(
     db::add_song(&db_pool, &name, "Unknown artist", &path, "0:00")
         .await
         .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn get_current_song(
-    db_pool: tauri::State<'_, sqlx::SqlitePool>,
-    current: tauri::State<'_, types::CurrentSong>,
-) -> Result<Option<types::Song>, String> {
-    let id = *current.0.lock().unwrap();
-    match id {
-        Some(id) => db::get_song(&db_pool, id).await.map_err(|e| e.to_string()),
-        None => Ok(None),
-    }
 }
 
 #[tauri::command]
@@ -285,16 +336,6 @@ pub async fn search_playlists(
         return Ok(vec![]);
     }
     db::search_playlists(&pool, &query, 10)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn get_n_songs(
-    pool: tauri::State<'_, sqlx::SqlitePool>,
-    n: i64,
-) -> Result<Vec<types::Song>, String> {
-    db::get_songs_range(&pool, 0, n)
         .await
         .map_err(|e| e.to_string())
 }

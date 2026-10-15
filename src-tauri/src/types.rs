@@ -32,7 +32,7 @@ pub struct Progress {
     pub current_song_id: Option<i64>,
 }
 
-pub enum ePlayback {
+pub enum EPlayback {
     Play { path: String },
     Pause,
     Resume,
@@ -40,6 +40,40 @@ pub enum ePlayback {
     Seek { position_secs: f64 },
     SetVolume { volume: f32 },
 }
+
+// ══════════════════════════════════════
+//  QUEUE
+// ══════════════════════════════════════
+
+#[derive(Clone, Default, serde::Serialize)]
+pub struct Queue {
+    pub songs: Vec<Song>,
+    pub current_index: Option<usize>,
+}
+
+impl Queue {
+    pub fn current(&self) -> Option<&Song> {
+        self.current_index.and_then(|i| self.songs.get(i))
+    }
+
+    pub fn next(&mut self) -> Option<&Song> {
+        let i = self.current_index? + 1;
+        if i < self.songs.len() {
+            self.current_index = Some(i);
+            self.songs.get(i)
+        } else {
+            None
+        }
+    }
+
+    pub fn previous(&mut self) -> Option<&Song> {
+        let i = self.current_index?.checked_sub(1)?;
+        self.current_index = Some(i);
+        self.songs.get(i)
+    }
+}
+
+pub struct QueueState(pub Mutex<Queue>);
 
 // ══════════════════════════════════════
 //  DATABASE

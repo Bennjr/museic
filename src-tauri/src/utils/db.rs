@@ -1,12 +1,9 @@
+use super::{audio, tray};
 use chrono::{DateTime, Utc};
-use rand::Rng;
-use sqlx::{
-    pool,
-    sqlite::{SqlitePool, SqlitePoolOptions},
-};
+use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 use std::path::Path;
 
-use crate::types::{Playlist, Song, SONG_COLUMNS};
+use crate::types::{self, SONG_COLUMNS};
 
 // ══════════════════════════════════════
 //  SETUP
@@ -106,12 +103,15 @@ pub async fn add_song(
 }
 
 // TODO, FIND HASH OF mp3 AND ADD IT ALONG WITH THE OTHER INFO
-pub async fn get_song(pool: &sqlx::SqlitePool, id: i64) -> Result<Option<Song>, sqlx::Error> {
+pub async fn get_song(
+    pool: &sqlx::SqlitePool,
+    id: i64,
+) -> Result<Option<types::Song>, sqlx::Error> {
     let sql = format!(
         "SELECT {SONG_COLUMNS} FROM songs \
         WHERE id = ?1"
     );
-    sqlx::query_as::<_, Song>(&sql)
+    sqlx::query_as::<_, types::Song>(&sql)
         .bind(id)
         .fetch_optional(pool)
         .await
@@ -120,13 +120,13 @@ pub async fn get_song(pool: &sqlx::SqlitePool, id: i64) -> Result<Option<Song>, 
 pub async fn get_recent_songs(
     pool: &sqlx::SqlitePool,
     limit: i64,
-) -> Result<Vec<Song>, sqlx::Error> {
+) -> Result<Vec<types::Song>, sqlx::Error> {
     let sql = format!(
         "SELECT {SONG_COLUMNS} FROM songs \
          ORDER BY id DESC \
          LIMIT ?1"
     );
-    sqlx::query_as::<_, Song>(&sql)
+    sqlx::query_as::<_, types::Song>(&sql)
         .bind(limit)
         .fetch_all(pool)
         .await
@@ -135,13 +135,13 @@ pub async fn get_recent_songs(
 pub async fn get_quick_picks(
     pool: &sqlx::SqlitePool,
     limit: i64,
-) -> Result<Vec<Song>, sqlx::Error> {
+) -> Result<Vec<types::Song>, sqlx::Error> {
     let sql = format!(
         "SELECT {SONG_COLUMNS} FROM songs \
          ORDER BY play_count DESC, id DESC \
          LIMIT ?1"
     );
-    sqlx::query_as::<_, Song>(&sql)
+    sqlx::query_as::<_, types::Song>(&sql)
         .bind(limit)
         .fetch_all(pool)
         .await
@@ -150,13 +150,13 @@ pub async fn get_quick_picks(
 pub async fn get_recently_played(
     pool: &sqlx::SqlitePool,
     limit: i64,
-) -> Result<Vec<Song>, sqlx::Error> {
+) -> Result<Vec<types::Song>, sqlx::Error> {
     let sql = format!(
         "SELECT {SONG_COLUMNS} FROM songs \
          WHERE last_played IS NOT NULL \
          ORDER BY last_played DESC LIMIT ?1"
     );
-    sqlx::query_as::<_, Song>(&sql)
+    sqlx::query_as::<_, types::Song>(&sql)
         .bind(limit)
         .fetch_all(pool)
         .await
@@ -165,84 +165,277 @@ pub async fn get_recently_played(
 pub async fn get_never_played(
     pool: &sqlx::SqlitePool,
     limit: i64,
-) -> Result<Vec<Song>, sqlx::Error> {
+) -> Result<Vec<types::Song>, sqlx::Error> {
     let sql = format!(
         "SELECT {SONG_COLUMNS} FROM songs \
          WHERE play_count = 0 \
          ORDER BY id DESC LIMIT ?1"
     );
-    sqlx::query_as::<_, Song>(&sql)
+    sqlx::query_as::<_, types::Song>(&sql)
         .bind(limit)
         .fetch_all(pool)
         .await
 }
 
 // ══════════════════════════════════════
-//  QUEUE MANAGEMENT
+//  PLAYBACK + QUEUE
 // ══════════════════════════════════════
 
-pub struct Queue {
-    songs: Vec<Song>,
-    current_index: Option<usize>,
+/// Starts a song, records the play, updates the tray.
+pub async fn begin(
+    app: &tauri::AppHandle,
+    pool: &sqlx::SqlitePool,
+    audio: &audio::AudioHandle,
+    current: &types::CurrentSong,
+    song: &types::Song,
+) {
+    audio.play(song.path.clone());
+    *current.0.lock().unwrap() = Some(song.id);
+
+    let _ =
+        sqlx::query("UPDATE songs SET play_count = play_count + 1, last_played = ?1 WHERE id = ?2")
+            .bind(chrono::Local::now().to_rfc3339())
+            .bind(song.id)
+            .execute(pool)
+            .await;
+
+    if let Err(e) = tray::update_tray(app, &song.name) {
+        eprintln!("failed to update tray: {e}");
+    }
 }
 
-pub async fn create_queue(pool: &sqlx::SqlitePool, count: usize) -> Result<Queue, sqlx::Error> {
-    let sql = format!("Select {SONG_COLUMNS} FROM songs");
-    let songs = sqlx::query_as::<_, Song>(&sql).fetch_all(pool).await?;
+pub async fn play_from_db(
+    app: &tauri::AppHandle,
+    pool: &sqlx::SqlitePool,
+    audio: &audio::AudioHandle,
+    current: &types::CurrentSong,
+    id: i64,
+) -> Result<types::Song, String> {
+    let song = get_song(pool, id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Song {id} not found"))?;
+    begin(app, pool, audio, current, &song).await;
+    Ok(song)
+}
 
+pub async fn next_song(
+    app: &tauri::AppHandle,
+    pool: &sqlx::SqlitePool,
+    queue: &types::QueueState,
+    audio: &audio::AudioHandle,
+    current: &types::CurrentSong,
+) -> Option<types::Song> {
+    let song = {
+        let mut q = queue.0.lock().unwrap();
+        let i = q.current_index? + 1;
+        if i >= q.songs.len() {
+            return None; // end of queue
+        }
+        q.current_index = Some(i);
+        q.songs[i].clone()
+    }; // lock released before the await
+    begin(app, pool, audio, current, &song).await;
+    Some(song)
+}
+
+pub async fn prev_song(
+    app: &tauri::AppHandle,
+    pool: &sqlx::SqlitePool,
+    queue: &types::QueueState,
+    audio: &audio::AudioHandle,
+    current: &types::CurrentSong,
+) -> Option<types::Song> {
+    let song = {
+        let mut q = queue.0.lock().unwrap();
+        let i = q.current_index?.checked_sub(1)?;
+        q.current_index = Some(i);
+        q.songs[i].clone()
+    };
+    begin(app, pool, audio, current, &song).await;
+    Some(song)
+}
+
+pub async fn navigate_queue(
+    app: &tauri::AppHandle,
+    pool: &sqlx::SqlitePool,
+    queue: &types::QueueState,
+    audio: &audio::AudioHandle,
+    current: &types::CurrentSong,
+    to: i64,
+) -> Option<types::Song> {
+    let index = usize::try_from(to).ok()?;
+    let song = {
+        let mut q = queue.0.lock().unwrap();
+        let song = q.songs.get(index)?.clone();
+        q.current_index = Some(index);
+        song
+    };
+    begin(app, pool, audio, current, &song).await;
+    Some(song)
+}
+
+/// Replace the queue and start at `start_index`.
+pub async fn activate(
+    app: &tauri::AppHandle,
+    pool: &sqlx::SqlitePool,
+    queue: &types::QueueState,
+    audio: &audio::AudioHandle,
+    current: &types::CurrentSong,
+    songs: Vec<types::Song>,
+    start_index: usize,
+) -> Option<types::Song> {
     if songs.is_empty() {
-        return Ok(Queue {
-            songs: vec![],
-            current_index: None,
-        });
+        return None;
     }
+    let index = start_index.min(songs.len() - 1);
+    let song = songs[index].clone();
+    {
+        let mut q = queue.0.lock().unwrap();
+        q.songs = songs;
+        q.current_index = Some(index);
+    }
+    begin(app, pool, audio, current, &song).await;
+    Some(song)
+}
 
+pub async fn play_songs(
+    app: &tauri::AppHandle,
+    pool: &sqlx::SqlitePool,
+    queue: &types::QueueState,
+    audio: &audio::AudioHandle,
+    current: &types::CurrentSong,
+    song_ids: Vec<i64>,
+    start_index: usize,
+) -> Result<Option<types::Song>, String> {
+    let mut songs = Vec::with_capacity(song_ids.len());
+    for id in song_ids {
+        if let Some(s) = get_song(pool, id).await.map_err(|e| e.to_string())? {
+            songs.push(s);
+        }
+    }
+    Ok(activate(app, pool, queue, audio, current, songs, start_index).await)
+}
+
+pub async fn play_playlist(
+    app: &tauri::AppHandle,
+    pool: &sqlx::SqlitePool,
+    queue: &types::QueueState,
+    audio: &audio::AudioHandle,
+    current: &types::CurrentSong,
+    playlist_id: i64,
+    start_index: Option<usize>,
+    shuffled: bool,
+) -> Result<Option<types::Song>, String> {
+    let mut songs = get_playlist_songs(pool, playlist_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let start = if shuffled {
+        songs = shuffle_songs(songs);
+        0
+    } else {
+        start_index.unwrap_or(0)
+    };
+    Ok(activate(app, pool, queue, audio, current, songs, start).await)
+}
+
+pub async fn add_to_queue(
+    app: &tauri::AppHandle,
+    pool: &sqlx::SqlitePool,
+    queue: &types::QueueState,
+    audio: &audio::AudioHandle,
+    current: &types::CurrentSong,
+    song_id: i64,
+) -> Result<(), String> {
+    let song = get_song(pool, song_id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or("song not found")?;
+
+    let start_now = {
+        let mut q = queue.0.lock().unwrap();
+        q.songs.push(song.clone());
+        if q.current_index.is_none() {
+            q.current_index = Some(q.songs.len() - 1);
+            true
+        } else {
+            false
+        }
+    };
+    if start_now {
+        begin(app, pool, audio, current, &song).await;
+    }
+    Ok(())
+}
+
+/// Reshuffles the queue. The playing song stays first and keeps playing.
+pub async fn shuffle(
+    app: &tauri::AppHandle,
+    pool: &sqlx::SqlitePool,
+    queue: &types::QueueState,
+    audio: &audio::AudioHandle,
+    current: &types::CurrentSong,
+) -> types::Queue {
+    let (result, to_play) = {
+        let mut q = queue.0.lock().unwrap();
+
+        let playing = q.current_index.and_then(|i| q.songs.get(i)).cloned();
+        let mut rest = q.songs.clone();
+        if let Some(p) = &playing {
+            rest.retain(|s| s.id != p.id);
+        }
+
+        let mut songs = shuffle_songs(rest);
+        if let Some(p) = playing.clone() {
+            songs.insert(0, p);
+        }
+
+        q.current_index = if songs.is_empty() { None } else { Some(0) };
+        q.songs = songs;
+
+        let to_play = if playing.is_none() {
+            q.songs.first().cloned()
+        } else {
+            None
+        };
+        (q.clone(), to_play)
+    };
+
+    if let Some(song) = to_play {
+        begin(app, pool, audio, current, &song).await;
+    }
+    result
+}
+
+pub fn shuffle_songs(songs: Vec<types::Song>) -> Vec<types::Song> {
     let now = Utc::now();
-
-    let mut pool: Vec<(Song, f64)> = songs
+    let mut pool: Vec<(types::Song, f64)> = songs
         .into_iter()
         .map(|song| {
-            let weight = calculate_weight(&song, now);
-            (song, weight)
+            let w = calculate_weight(&song, now);
+            (song, w)
         })
         .collect();
 
-    let mut queue = Vec::with_capacity(count.min(pool.len()));
-    let mut rng = rand::rngs::ThreadRng::default();
+    let mut out = Vec::with_capacity(pool.len());
+    while !pool.is_empty() {
+        let total: f64 = pool.iter().map(|(_, w)| *w).sum();
+        let mut pick = rand::random_range(0.0..total);
+        let mut chosen = pool.len() - 1;
 
-    for _ in 0..count {
-        if pool.is_empty() {
-            break;
-        }
-
-        let total_weight: f64 = pool.iter().map(|(_, w)| *w).sum();
-
-        if total_weight <= 0.0 {
-            break;
-        }
-
-        let mut pick = rand::random_range(0.0..total_weight);
-        let mut chosen_index = 0;
-
-        for (i, (_, weight)) in pool.iter().enumerate() {
-            if pick < *weight {
-                chosen_index = i;
+        for (i, (_, w)) in pool.iter().enumerate() {
+            if pick < *w {
+                chosen = i;
                 break;
             }
-            pick -= weight;
+            pick -= *w;
         }
-
-        let (song, _) = pool.swap_remove(chosen_index);
-        queue.push(song);
+        out.push(pool.swap_remove(chosen).0);
     }
-
-    Ok(Queue {
-        songs: queue.clone(),
-        current_index: if queue.is_empty() { None } else { Some(0) },
-    })
+    out
 }
 
-fn calculate_weight(song: &Song, now: DateTime<Utc>) -> f64 {
+fn calculate_weight(song: &types::Song, now: DateTime<Utc>) -> f64 {
     let days_since = match &song.last_played {
         Some(last_played) => match DateTime::parse_from_rfc3339(last_played) {
             Ok(dt) => (now - dt.with_timezone(&Utc)).num_days() as f64,
@@ -299,7 +492,7 @@ pub async fn get_songs_range(
     pool: &SqlitePool,
     from: i64,
     to: i64,
-) -> Result<Vec<Song>, sqlx::Error> {
+) -> Result<Vec<types::Song>, sqlx::Error> {
     let from = from.max(0);
     let limit = (to - from).max(0);
 
@@ -309,7 +502,7 @@ pub async fn get_songs_range(
          LIMIT ?1 OFFSET ?2"
     );
 
-    sqlx::query_as::<_, Song>(&sql)
+    sqlx::query_as::<_, types::Song>(&sql)
         .bind(limit)
         .bind(from)
         .fetch_all(pool)
@@ -321,7 +514,7 @@ pub async fn get_songs_by_sort(
     sort_by: &str,
     offset: i64,
     limit: i64,
-) -> Result<Vec<Song>, sqlx::Error> {
+) -> Result<Vec<types::Song>, sqlx::Error> {
     let from = offset.max(0);
     let limit = limit.max(0);
 
@@ -340,7 +533,7 @@ pub async fn get_songs_by_sort(
          LIMIT ?1 OFFSET ?2"
     );
 
-    sqlx::query_as::<_, Song>(&sql)
+    sqlx::query_as::<_, types::Song>(&sql)
         .bind(limit)
         .bind(from)
         .fetch_all(pool)
@@ -413,7 +606,7 @@ pub async fn add_to_playlist(
 pub async fn get_playlist_songs(
     pool: &sqlx::SqlitePool,
     playlist_id: i64,
-) -> Result<Vec<Song>, sqlx::Error> {
+) -> Result<Vec<types::Song>, sqlx::Error> {
     let sql = format!(
         "SELECT {SONG_COLUMNS} \
         FROM songs s
@@ -422,22 +615,25 @@ pub async fn get_playlist_songs(
         ORDER BY ps.position"
     );
 
-    sqlx::query_as::<_, Song>(&sql)
+    sqlx::query_as::<_, types::Song>(&sql)
         .bind(playlist_id)
         .fetch_all(pool)
         .await
 }
 
-pub async fn get_playlists(pool: &sqlx::SqlitePool) -> Result<Vec<Playlist>, sqlx::Error> {
-    sqlx::query_as::<_, Playlist>(
+pub async fn get_playlists(pool: &sqlx::SqlitePool) -> Result<Vec<types::Playlist>, sqlx::Error> {
+    sqlx::query_as::<_, types::Playlist>(
         "SELECT id, name, description, created FROM playlists ORDER BY created DESC",
     )
     .fetch_all(pool)
     .await
 }
 
-pub async fn get_playlist(pool: &sqlx::SqlitePool, id: i64) -> Result<Playlist, sqlx::Error> {
-    sqlx::query_as::<_, Playlist>(
+pub async fn get_playlist(
+    pool: &sqlx::SqlitePool,
+    id: i64,
+) -> Result<types::Playlist, sqlx::Error> {
+    sqlx::query_as::<_, types::Playlist>(
         "SELECT id, name, description, created FROM playlists WHERE id = ?1",
     )
     .bind(id)
@@ -453,7 +649,7 @@ pub async fn search_songs(
     pool: &sqlx::SqlitePool,
     query: &str,
     limit: i64,
-) -> Result<Vec<Song>, sqlx::Error> {
+) -> Result<Vec<types::Song>, sqlx::Error> {
     let pattern = format!("%{query}%");
     let sql = format!(
         "SELECT {SONG_COLUMNS} FROM songs \
@@ -461,7 +657,7 @@ pub async fn search_songs(
          ORDER BY name \
          LIMIT ?2"
     );
-    sqlx::query_as::<_, Song>(&sql)
+    sqlx::query_as::<_, types::Song>(&sql)
         .bind(pattern)
         .bind(limit)
         .fetch_all(pool)
@@ -472,7 +668,7 @@ pub async fn search_playlists(
     pool: &sqlx::SqlitePool,
     query: &str,
     limit: i64,
-) -> Result<Vec<Playlist>, sqlx::Error> {
+) -> Result<Vec<types::Playlist>, sqlx::Error> {
     let pattern = format!("%{query}%");
     let sql = format!(
         "SELECT id, name, description, created FROM playlists \
@@ -480,7 +676,7 @@ pub async fn search_playlists(
          ORDER BY name \
          LIMIT ?2"
     );
-    sqlx::query_as::<_, Playlist>(&sql)
+    sqlx::query_as::<_, types::Playlist>(&sql)
         .bind(pattern)
         .bind(limit)
         .fetch_all(pool)

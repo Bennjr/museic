@@ -30,6 +30,7 @@ rodio = "0.22.2"
 sqlx = { version= "0.8.6", features = ["sqlite", "runtime-tokio", "macros", "sqlite-unbundled"] }
 chrono = "0.4.45"
 rand = {version= "0.10.3", features = ["thread_rng"] }
+lofty = "0.25.4"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

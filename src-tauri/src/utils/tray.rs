@@ -4,7 +4,7 @@ use tauri::{
     AppHandle, Manager,
 };
 
-use super::{commands, music};
+use super::{audio, commands};
 use crate::types;
 
 fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
@@ -33,7 +33,7 @@ pub fn update_tray(app: &AppHandle, text: &str) -> tauri::Result<()> {
     items.current_song.set_text(format!("Song: {text}"))
 }
 
-pub fn setup_tray(app: &AppHandle, audio_handle: music::AudioHandle) -> tauri::Result<TrayIcon> {
+pub fn setup_tray(app: &AppHandle, audio_handle: audio::AudioHandle) -> tauri::Result<TrayIcon> {
     let menu = build_menu(app)?;
 
     TrayIconBuilder::new()

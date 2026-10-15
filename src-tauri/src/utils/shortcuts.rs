@@ -1,9 +1,9 @@
-use super::music;
+use super::audio;
 use tauri::Manager;
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Shortcut, ShortcutState};
 
 pub fn shortcuts_setup(app: &tauri::AppHandle) {
-    let audio = app.state::<music::AudioHandle>().inner().clone();
+    let audio = app.state::<audio::AudioHandle>().inner().clone();
 
     let key_pause = Shortcut::new(None, Code::MediaPlayPause);
     let key_next = Shortcut::new(None, Code::MediaTrackNext);

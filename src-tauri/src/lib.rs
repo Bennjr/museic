@@ -1,7 +1,7 @@
 mod types;
 mod utils;
 
-use utils::{commands, db, music, shortcuts, tray};
+use utils::{audio, commands, db, shortcuts, tray};
 
 use std::sync::Mutex;
 use tauri::Manager;
@@ -18,9 +18,10 @@ pub fn run() {
             let app_data_dir = app.path().app_data_dir().expect("no app data dir");
             std::fs::create_dir_all(&app_data_dir).ok();
 
-            let audio_handle = music::spawn_audio_thread();
+            let audio_handle = audio::spawn_audio_thread();
             app.manage(audio_handle.clone());
             app.manage(types::CurrentSong(Mutex::new(None)));
+            app.manage(types::QueueState(Mutex::new(types::Queue::default())));
 
             tauri::async_runtime::block_on(async {
                 let pool = db::init_db(&app_data_dir).await.expect("db init failed");
@@ -56,10 +57,8 @@ pub fn run() {
             commands::update_song_field,
             commands::delete_playlist,
             commands::add_to_playlist,
-            commands::get_current_song,
             commands::search_songs,
             commands::search_playlists,
-            commands::get_n_songs,
             commands::get_songs_range,
             commands::get_song,
             commands::get_songs_by_sort,
